@@ -1,0 +1,45 @@
+const {JSDOM}=require('jsdom');
+const {readFileSync}=require('node:fs');
+const {resolve}=require('node:path');
+const assert=require('node:assert/strict');
+const root=resolve(__dirname,'../custom_components/essensplaner/www');
+const dom=new JSDOM('<!doctype html><body>',{runScripts:'dangerously',url:'https://example.test'}),w=dom.window;
+const exportNames='UI_CSS,UI_VERSION,navigation,section,row,button,iconButton,toggle,filterButton,field,selectField,dialog,notice,versionInfo,bindUI,escapeHtml';
+w.eval(readFileSync(root+'/family-ui/1.0.0/family-ui.js','utf8').replace(/export /g,'')+`;window.TestKit={${exportNames}};`);
+w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
+w.HTMLDialogElement.prototype.close=function(){if(!this.open)return;this.open=false;queueMicrotask(()=>this.dispatchEvent(new w.Event('close')))};
+w.HTMLElement.prototype.scrollIntoView=function(){};
+w.eval(readFileSync(root+'/essensplaner-card.js','utf8').replace(/^import .*;\n/,`const {${exportNames}}=window.TestKit;\n`));
+const people=['Vera','Manuel','Maximilian','Paul'],cards=[],calls=[];
+let entries={},meals=Array.from({length:8},(_,i)=>({id:'m'+i,name:`Reis & Gemüse ${i}`,meat:false,eaters:[...people]})),reject=false;
+function publish(){for(const {card,name}of cards){const state={entity_id:'sensor.familienessen',attributes:{integration_version:'1.3.0',week_start:card.mondayOf(card.dateKey(new Date())),days:[],entries:JSON.parse(JSON.stringify(entries)),meals:JSON.parse(JSON.stringify(meals))}};card.hass={user:{id:name,name,is_admin:false},states:{[state.entity_id]:state},callService:async(domain,service,data)=>{if(reject){reject=false;throw Error('Speichern abgelehnt')};calls.push({domain,service,data});if(service==='plan_day'){if(data.clear)delete entries[data.date];else entries[data.date]={title:meals.find(m=>m.id===data.meal_id)?.name||data.text,meal_id:data.meal_id,planned_by:name,planned_by_user_id:name};}if(service==='save_meal'){const m={id:data.id||'new',name:data.name,meat:data.meat,eaters:data.eaters};meals.push(m)}publish();}};}}
+function create(name){const card=w.document.createElement('essensplaner-card');card.setConfig({});w.document.body.append(card);cards.push({card,name});publish();return card}
+const q=(c,s)=>c.shadowRoot.querySelector(s),click=(c,s)=>{const el=q(c,s);assert(el,s);el.click()},input=(c,s,value)=>{const el=q(c,s);el.value=value;el.dispatchEvent(new w.Event('input'))};
+const tick=()=>new Promise(r=>setImmediate(r));
+(async()=>{
+ const paul=create('Paul'),manuel=create('Manuel'),base=manuel._weekStart;
+ click(paul,'[data-action="shift"][data-shift="1"]');assert.equal(manuel._weekStart,base);assert.equal(calls.length,0);
+ await paul.action('view',{view:'settings'});assert.equal(paul._view,'week');assert.equal(q(paul,'[data-page="settings"]'),null);
+ click(paul,'[data-page="random"]');assert.equal(paul.shadowRoot.querySelectorAll('[role="switch"][aria-checked="true"]').length,4);
+ click(paul,'[data-action="suggest"]');assert.equal(paul._suggestion.meal.meat,false);
+ console.log('PASS shared navigation, independent weeks, settings permissions and random people');
+ const date=base;
+ manuel.openDay(date);assert.equal(manuel._modal.kind,'saved');
+ input(manuel,'#meal-search','REIS');assert.equal(manuel.shadowRoot.querySelectorAll('.meal-option').length,8);
+ manuel.selectMeal(manuel.matchingMeals()[2]);publish();assert.equal(q(manuel,'#meal-search').value,'Reis & Gemüse 2');
+ reject=true;await manuel.saveDay();assert.equal(q(manuel,'[data-dialog-feedback] [role="alert"]').textContent,'Speichern abgelehnt');assert.equal(q(manuel,'#meal-search').value,'Reis & Gemüse 2');
+ await manuel.saveDay();await tick();assert.equal(entries[date].meal_id,'m2');assert.equal(calls.at(-1).data.entity_id,'sensor.familienessen');assert(q(manuel,'[data-shell]').textContent.includes('Reis & Gemüse 2'));
+ console.log('PASS partial search, preserved modal fields, errors, saved ID and live rendering');
+ const next=new Date(base+'T12:00:00');next.setDate(next.getDate()+1);manuel.openDay(manuel.dateKey(next));
+ click(manuel,'[data-action="plan-kind"][data-value="free"]');input(manuel,'[data-field="text"]','Nudeln');input(manuel,'[data-field="link"]','https://example.test/rezept');click(manuel,'[data-action="save-to-catalog"]');click(manuel,'[data-action="new-eater"][data-new-eater="Maximilian"]');
+ click(manuel,'[data-action="plan-kind"][data-value="saved"]');click(manuel,'[data-action="plan-kind"][data-value="free"]');
+ assert.equal(q(manuel,'[data-field="text"]').value,'Nudeln');assert.equal(q(manuel,'[data-field="link"]').value,'https://example.test/rezept');assert.equal(q(manuel,'[data-field="save-to-catalog"]').getAttribute('aria-checked'),'true');assert.equal(q(manuel,'[data-new-eater="Maximilian"]').getAttribute('aria-checked'),'true');
+ await manuel.action('close-modal',{});await tick();
+ entries[date]={title:'Von Paul',planned_by:'Paul',planned_by_user_id:'Paul'};publish();await paul.action('view',{view:'week'});await paul.action('today',{});
+ assert(q(paul,`[data-action="confirm-delete-day"][data-date="${date}"]`));await paul.action('confirm-delete-day',{date});await paul.deleteConfirmed();await tick();assert.equal(entries[date],undefined);
+ console.log('PASS free-input drafts, catalog switch state and own-entry deletion');
+ click(manuel,'[data-page="settings"]');click(manuel,'[data-ui="collapse"]');publish();assert.equal(q(manuel,'#meals-content').hidden,true);
+ let downloaded;w.Blob=Blob;w.URL.createObjectURL=blob=>{downloaded=blob;return'blob:test'};w.URL.revokeObjectURL=()=>{};w.HTMLAnchorElement.prototype.click=function(){};manuel.exportMeals();const exported=JSON.parse(await downloaded.text());assert.equal(exported.meals.length,8);assert.deepEqual(exported.people,people);
+ const before=calls.length;manuel.remove();w.document.body.append(manuel);click(manuel,'[data-page="random"]');click(manuel,'[data-action="random-person"][data-person="Paul"]');assert.equal(manuel._randomPeople.includes('Paul'),false);assert.equal(calls.length,before);
+ console.log('PASS collapse persistence, export payload and reconnect without duplicate listeners');
+})().catch(e=>{console.error(e);process.exitCode=1}).finally(()=>w.close());

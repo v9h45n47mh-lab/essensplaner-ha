@@ -17,7 +17,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
-from .const import DOMAIN, PEOPLE, STORAGE_KEY, STORAGE_VERSION
+from .const import DOMAIN, PEOPLE, STORAGE_KEY, STORAGE_VERSION, VERSION
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS = ["sensor"]
@@ -160,21 +160,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.services.async_register(DOMAIN,"save_meal",save_meal, schema=MEAL_SCHEMA)
     hass.services.async_register(DOMAIN,"delete_meal",delete_meal, schema=DELETE_MEAL_SCHEMA)
     hass.services.async_register(DOMAIN,"plan_day",plan_day, schema=PLAN_SCHEMA)
-    panel_file = Path(__file__).parent / "www" / "essensplaner-card.js"
-    try:
-        await hass.http.async_register_static_paths([StaticPathConfig("/essensplaner-card.js", str(panel_file), cache_headers=True)])
-    except RuntimeError:
-        # The static path is already registered during an in-place config-entry reload.
-        pass
+    frontend_dir = Path(__file__).parent / "www"
+    paths = [
+        StaticPathConfig("/essensplaner", str(frontend_dir), cache_headers=True),
+        StaticPathConfig("/essensplaner-card.js", str(frontend_dir / "essensplaner-card-loader.js"), cache_headers=True),
+    ]
+    for static_path in paths:
+        try:
+            await hass.http.async_register_static_paths([static_path])
+        except RuntimeError:
+            # The path is already registered during a config-entry reload.
+            pass
     lovelace = hass.data.get("lovelace")
     if lovelace and lovelace.resource_mode == MODE_STORAGE:
         resources = lovelace.resources
         await resources.async_get_info()
-        resource_url = "/essensplaner-card.js?v=1.2.2"
+        resource_url = f"/essensplaner/essensplaner-card.js?v={VERSION}"
         found_resource = False
         for resource in resources.async_items():
             current_url = resource.get("url", "")
-            if current_url.split("?", 1)[0] == "/essensplaner-card.js":
+            if current_url.split("?", 1)[0] in ("/essensplaner-card.js", "/essensplaner/essensplaner-card.js"):
                 if current_url == resource_url and not found_resource:
                     found_resource = True
                 else:
