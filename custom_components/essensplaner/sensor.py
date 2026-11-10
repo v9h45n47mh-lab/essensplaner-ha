@@ -35,5 +35,5 @@ class MealPlannerSensor(SensorEntity):
         # State attributes must be independent of the mutable stored catalog.
         # Otherwise an edit can also alter the previous HA state, suppressing
         # the state_changed event which refreshes connected cards.
-        self._attr_extra_state_attributes=deepcopy({"week_start":start.isoformat(),"week_end":(start+timedelta(days=6)).isoformat(),"days":days,"meals":data["meals"],"history":data.get("history",[])[:40]})
+        self._attr_extra_state_attributes=deepcopy({"week_start":start.isoformat(),"week_end":(start+timedelta(days=6)).isoformat(),"days":days,"entries":data["days"],"meals":data["meals"],"history":data.get("history",[])[:40]})
         self.async_write_ha_state()

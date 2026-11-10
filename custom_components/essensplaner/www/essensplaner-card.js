@@ -3,6 +3,7 @@ class EssensplanerCard extends HTMLElement {
     this.config = config || {};
     if (!this.shadowRoot) this.attachShadow({ mode: 'open' });
     this._view = 'week';
+    this._weekStart = this._weekStart || this.mondayOf(this.dateKey(new Date()));
     this._modal = null;
     this._notice = '';
     this._noticeError = false;
@@ -16,8 +17,6 @@ class EssensplanerCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    const weekStart = this.getState()?.attributes?.week_start;
-    if (this._weekRequested && weekStart === this._weekRequested) this._weekRequested = null;
     if (!this.isManager() && this._view === 'settings') this._view = 'week';
     if (!this._modal) this.render();
   }
@@ -40,20 +39,30 @@ class EssensplanerCard extends HTMLElement {
     return this.dateKey(date);
   }
   shiftWeek(delta) {
-    const start = this._weekRequested || this.getState()?.attributes?.week_start || this.dateKey(new Date());
-    const date = new Date(`${start}T12:00:00`);
+    const date = new Date(`${this._weekStart}T12:00:00`);
     date.setDate(date.getDate() + delta * 7);
     const next = this.mondayOf(this.dateKey(date));
-    this._weekRequested = next;
+    const attributes = this.getState()?.attributes;
+    if (!attributes?.entries && next !== attributes?.week_start) {
+      this.notify('Bitte nach dem Update Home Assistant neu starten und die App neu laden, damit alle Kalenderwochen verfügbar sind.', true);
+      return;
+    }
+    this._weekStart = next;
     this.render();
-    this.call('show_week', { date: next }).then(() => {
-      setTimeout(() => {
-        if (this._weekRequested === next && this.getState()?.attributes?.week_start !== next) {
-          this._weekRequested = null;
-          this.notify('Die Kalenderwoche wurde von Home Assistant nicht aktualisiert. Bitte Integration neu laden.', true);
-        }
-      }, 2500);
-    }).catch((error) => { this._weekRequested = null; this.notify(error.message || 'Wochenwechsel fehlgeschlagen.', true); });
+  }
+  entryFor(date) {
+    const attributes = this.getState()?.attributes || {};
+    return attributes.entries ? attributes.entries[date] || null : (attributes.days || []).find((day) => day.date === date)?.entry || null;
+  }
+  weekDays() {
+    const attributes = this.getState()?.attributes;
+    if (!attributes || (!attributes.entries && this._weekStart !== attributes.week_start)) return [];
+    return Array.from({ length: 7 }, (_, offset) => {
+      const day = new Date(`${this._weekStart}T12:00:00`);
+      day.setDate(day.getDate() + offset);
+      const date = this.dateKey(day);
+      return { date, entry: this.entryFor(date) };
+    });
   }
   async call(service, data = {}) {
     const state = this.getState();
@@ -71,10 +80,9 @@ class EssensplanerCard extends HTMLElement {
     const state = this.getState();
     const a = state?.attributes || {};
     const meals = a.meals || [];
-    const requestedWeek = this._weekRequested && this._weekRequested !== a.week_start ? this._weekRequested : null;
-    const weekStart = requestedWeek || a.week_start;
+    const weekStart = this._weekStart;
     const weekEnd = weekStart ? (() => { const end = new Date(`${weekStart}T12:00:00`); end.setDate(end.getDate() + 6); return this.dateKey(end); })() : a.week_end;
-    const days = requestedWeek ? [] : (a.days || []);
+    const days = this.weekDays();
     const dayRows = days.map((d, index) => {
       const entry = d.entry;
       return `<article class="day ${entry ? 'planned' : 'empty'}" data-day="${d.date}">
@@ -96,7 +104,7 @@ class EssensplanerCard extends HTMLElement {
       .overlay{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:16px;background:rgba(0,0,0,.42)}.dialog{width:min(560px,100%);max-height:min(90vh,780px);overflow:auto;background:var(--ha-card-background,var(--card-background-color,#fff));color:var(--primary-text-color,#212121);border-radius:16px;box-shadow:0 12px 40px #0004;padding:20px}.dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}.dialog-head h2{font-size:20px;font-weight:500;margin:0}.close{font-size:23px;width:38px;height:38px;padding:4px}.form-grid{display:grid;gap:14px}.field{display:grid;gap:6px}.field>span,.group-label{font-size:13px;font-weight:500}.field input[type=text],.field input[type=url],.field select,.search-select{width:100%;min-height:44px;border:1px solid var(--divider-color,#ccc);border-radius:8px;padding:10px 12px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#212121)}.choice-row,.check-grid{display:flex;flex-wrap:wrap;gap:8px}.choice,.person-choice{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--divider-color,#ddd);border-radius:22px;padding:9px 12px;cursor:pointer}.choice:has(input:checked),.person-choice:has(input:checked){border-color:var(--primary-color,#03a9f4);background:color-mix(in srgb,var(--primary-color,#03a9f4) 9%,transparent)}input[type=checkbox],input[type=radio]{accent-color:var(--primary-color,#03a9f4);width:16px;height:16px;margin:0}.saved-meal-picker{display:grid;gap:8px}.saved-meal-picker select{width:100%;min-height:48px;padding:10px 12px;border:1px solid var(--divider-color,#ccc);border-radius:8px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#212121);font:inherit}.check-grid{margin-top:8px}.dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;padding-top:12px;border-top:1px solid var(--divider-color,#e0e0e0)}.dialog .hint{margin-top:-4px}.confirm-copy{font-size:14px;line-height:1.5}
       @media(max-width:520px){main{padding:6px 12px 12px}.day{grid-template-columns:44px minmax(0,1fr) auto;gap:8px;min-height:68px}.icon-button{width:34px;height:38px}.row-actions{flex-direction:column;align-items:flex-end}.dialog{padding:16px}.tabs button{padding:15px 12px}}
     </style><ha-card><div class="card-top"><nav aria-label="Essensplaner"><button data-action="view" data-view="week" class="${this._view === 'week' ? 'selected' : ''}">Essensplan</button><button data-action="view" data-view="random" class="${this._view === 'random' ? 'selected' : ''}">Zufallsrezept</button></nav>${this.isManager() ? `<button class="settings-button ${this._view === 'settings' ? 'selected' : ''}" data-action="view" data-view="settings" aria-label="Einstellungen" title="Einstellungen" aria-current="${this._view === 'settings' ? 'page' : 'false'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.2 7.2 0 0 0-1.63-.94l-.36-2.54A.49.49 0 0 0 13.88 2h-3.76a.49.49 0 0 0-.49.42L9.27 4.96c-.59.23-1.13.55-1.63.94l-2.39-.96a.5.5 0 0 0-.61.22L2.72 8.48a.5.5 0 0 0 .12.64l2.03 1.58a6.8 6.8 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .61.22l2.39-.96c.5.39 1.04.71 1.63.94l.36 2.54a.49.49 0 0 0 .49.42h3.76a.49.49 0 0 0 .49-.42l.36-2.54c.59.23 1.13.55 1.63.94l2.39.96a.5.5 0 0 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg></button>` : ''}</div><main>
-      ${this._view === 'week' ? `<div class="week"><button data-action="shift" data-shift="-1" aria-label="Vorherige Woche">‹</button><strong>${this.weekLabel(weekStart, weekEnd)}</strong><button data-action="today">Heute</button><button data-action="shift" data-shift="1" aria-label="Nächste Woche">›</button></div><div class="days">${dayRows || `<div class="empty-state">${requestedWeek ? 'Kalenderwoche wird geladen …' : state ? 'Für diese Woche sind keine Einträge verfügbar.' : 'Der Wochenplan-Sensor ist nicht geladen. Bitte Integration und Home-Assistant-Protokoll prüfen.'}</div>`}</div>` : this._view === 'random' ? randomMarkup : `<div class="page-actions"><h2>Gerichte</h2><button class="primary" data-action="new-meal">+ Gericht hinzufügen</button></div><p class="hint">Hier pflegst du eure gespeicherten Gerichte und die Personen, die sie gern essen.</p><div class="meal-list">${mealRows || '<div class="empty-state">Noch keine Gerichte gespeichert. Füge ein Gericht hinzu.</div>'}</div>`}
+      ${this._view === 'week' ? `<div class="week"><button data-action="shift" data-shift="-1" aria-label="Vorherige Woche">‹</button><strong>${this.weekLabel(weekStart, weekEnd)}</strong><button data-action="today">Heute</button><button data-action="shift" data-shift="1" aria-label="Nächste Woche">›</button></div><div class="days">${dayRows || `<div class="empty-state">${state ? 'Für diese Woche sind keine Einträge verfügbar.' : 'Der Wochenplan-Sensor ist nicht geladen. Bitte Integration und Home-Assistant-Protokoll prüfen.'}</div>`}</div>` : this._view === 'random' ? randomMarkup : `<div class="page-actions"><h2>Gerichte</h2><button class="primary" data-action="new-meal">+ Gericht hinzufügen</button></div><p class="hint">Hier pflegst du eure gespeicherten Gerichte und die Personen, die sie gern essen.</p><div class="meal-list">${mealRows || '<div class="empty-state">Noch keine Gerichte gespeichert. Füge ein Gericht hinzu.</div>'}</div>`}
       ${this._notice ? `<div class="notice ${this._noticeError ? 'error' : ''}" role="status">${this.esc(this._notice)}</div>` : ''}
       ${this._modal ? this.renderModal(meals) : ''}
     </main></ha-card>`;
@@ -166,7 +174,7 @@ class EssensplanerCard extends HTMLElement {
   }
   openDay(date) {
     const state = this.getState()?.attributes || {};
-    const entry = (state.days || []).find((d) => d.date === date)?.entry || {};
+    const entry = this.entryFor(date) || {};
     const savedMeal = (state.meals || []).find((meal) => meal.id === entry.meal_id);
     const pending = this._pendingMeal;
     this._modal = { type: 'day', date, entry, kind: pending || entry.meal_id ? 'saved' : 'free', mealId: pending?.id || entry.meal_id || null, mealName: pending?.name || savedMeal?.name || '', mealDropdownOpen: false, freeText: entry.meal_id || pending ? '' : (entry.title || ''), link: entry.link || '', saveToCatalog: false };
@@ -178,9 +186,8 @@ class EssensplanerCard extends HTMLElement {
     if (action === 'shift') { this.shiftWeek(Number(data.shift)); return; }
     if (action === 'today') {
       const date = this.dateKey(new Date());
-      this._weekRequested = this.mondayOf(date);
+      this._weekStart = this.mondayOf(date);
       this.render();
-      try { await this.call('show_week', { date }); } catch (error) { this._weekRequested = null; this.notify(error.message || 'Kalenderwoche konnte nicht geladen werden.', true); }
       return;
     }
     if (action === 'open-day') { this.openDay(data.date); return; }
