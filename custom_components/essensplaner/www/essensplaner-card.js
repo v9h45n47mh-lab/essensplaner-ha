@@ -7,16 +7,53 @@ class EssensplanerCard extends HTMLElement {
     this._notice = '';
     this._noticeError = false;
     this._people = [];
+    this._randomPeople = ['Vera', 'Manuel', 'Paul'];
+    this._shownSuggestionIds = [];
+    this._suggestion = null;
+    this._pendingMeal = null;
     this.render();
   }
 
-  set hass(hass) { this._hass = hass; this.render(); }
+  set hass(hass) {
+    this._hass = hass;
+    const weekStart = this.getState()?.attributes?.week_start;
+    if (this._weekRequested && weekStart === this._weekRequested) this._weekRequested = null;
+    if (!this.isManager() && this._view === 'settings') this._view = 'week';
+    if (!this._modal) this.render();
+  }
   getCardSize() { return 6; }
   getState() {
     const states = this._hass?.states || {};
     const valid = (s) => s?.attributes?.week_start && Array.isArray(s.attributes.days) && Array.isArray(s.attributes.meals);
     const exact = states['sensor.essensplaner_wochenplan'];
     return valid(exact) ? exact : Object.values(states).find(valid) || null;
+  }
+  isManager() {
+    const user = this._hass?.user;
+    const name = String(user?.name || '').toLocaleLowerCase();
+    return Boolean(user?.is_admin || /(^|[^a-z])(vera|manuel)([^a-z]|$)/.test(name));
+  }
+  dateKey(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; }
+  mondayOf(dateString) {
+    const date = new Date(`${dateString}T12:00:00`);
+    date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+    return this.dateKey(date);
+  }
+  shiftWeek(delta) {
+    const start = this._weekRequested || this.getState()?.attributes?.week_start || this.dateKey(new Date());
+    const date = new Date(`${start}T12:00:00`);
+    date.setDate(date.getDate() + delta * 7);
+    const next = this.mondayOf(this.dateKey(date));
+    this._weekRequested = next;
+    this.render();
+    this.call('show_week', { date: next }).then(() => {
+      setTimeout(() => {
+        if (this._weekRequested === next && this.getState()?.attributes?.week_start !== next) {
+          this._weekRequested = null;
+          this.notify('Die Kalenderwoche wurde von Home Assistant nicht aktualisiert. Bitte Integration neu laden.', true);
+        }
+      }, 2500);
+    }).catch((error) => { this._weekRequested = null; this.notify(error.message || 'Wochenwechsel fehlgeschlagen.', true); });
   }
   async call(service, data = {}) { return this._hass.callService('essensplaner', service, data); }
   esc(value) { return String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
@@ -29,7 +66,10 @@ class EssensplanerCard extends HTMLElement {
     const state = this.getState();
     const a = state?.attributes || {};
     const meals = a.meals || [];
-    const days = a.days || [];
+    const requestedWeek = this._weekRequested && this._weekRequested !== a.week_start ? this._weekRequested : null;
+    const weekStart = requestedWeek || a.week_start;
+    const weekEnd = weekStart ? (() => { const end = new Date(`${weekStart}T12:00:00`); end.setDate(end.getDate() + 6); return this.dateKey(end); })() : a.week_end;
+    const days = requestedWeek ? [] : (a.days || []);
     const dayRows = days.map((d, index) => {
       const entry = d.entry;
       return `<article class="day ${entry ? 'planned' : 'empty'}" data-day="${d.date}">
@@ -39,26 +79,45 @@ class EssensplanerCard extends HTMLElement {
       </article>`;
     }).join('');
     const mealRows = meals.map((meal) => `<article class="meal-row"><div class="meal-main"><strong>${this.esc(meal.name)}</strong><span class="tag ${meal.meat ? 'meat' : 'veg'}">${meal.meat ? 'Mit Fleisch' : 'Vegetarisch'}</span><small>Isst gern: ${this.esc((meal.eaters || []).join(', ') || 'Keine Personen zugeordnet')}</small></div><div class="row-actions"><button data-action="edit-meal" data-id="${this.esc(meal.id)}">Bearbeiten</button><button class="danger" data-action="confirm-delete-meal" data-id="${this.esc(meal.id)}" aria-label="Gericht löschen">Löschen</button></div></article>`).join('');
+    const randomMeal = this._suggestion?.meal;
+    const randomMarkup = `<section class="random-view"><div class="page-actions"><h2>Zufallsrezept</h2></div><p class="hint">Wähle aus, wer mitisst. Der Vorschlag kommt aus euren gespeicherten Gerichten.</p><div class="check-grid random-people">${['Vera', 'Manuel', 'Maximilian', 'Paul'].map((person) => `<label class="person-choice"><input type="checkbox" data-random-person="${person}" ${this._randomPeople.includes(person) ? 'checked' : ''}> ${person}</label>`).join('')}</div><div class="random-buttons"><button class="primary" data-action="suggest">${this._suggestion ? 'Gericht vorschlagen' : 'Zufallsgericht vorschlagen'}</button>${this._suggestion ? '<button data-action="another">Anderes Gericht</button>' : ''}</div>${randomMeal ? `<article class="suggestion"><div class="meal-main"><strong>${this.esc(randomMeal.name)}</strong><span class="tag ${randomMeal.meat ? 'meat' : 'veg'}">${randomMeal.meat ? 'Mit Fleisch' : 'Vegetarisch'}</span><small>Isst gern: ${this.esc((randomMeal.eaters || []).join(', '))}</small></div><p class="hint">${this.esc(this._suggestion.reason)}</p><button class="primary" data-action="plan-suggestion">Im Essensplan einplanen</button></article>` : ''}</section>`;
     this.shadowRoot.innerHTML = `<style>
       :host{display:block;color:var(--primary-text-color,#212121);font-family:var(--ha-font-family-body,Roboto,Arial,sans-serif);font-size:14px}*{box-sizing:border-box}ha-card{display:block;background:var(--ha-card-background,var(--card-background-color,#fff));border:var(--ha-card-border-width,1px) solid var(--ha-card-border-color,var(--divider-color,#e0e0e0));border-radius:var(--ha-card-border-radius,12px);box-shadow:var(--ha-card-box-shadow,none);overflow:hidden}
       button,input,select{font:inherit}button{color:var(--primary-color,#03a9f4);border:0;background:transparent;border-radius:var(--ha-button-border-radius,20px);padding:9px 14px;cursor:pointer;line-height:1.35;font-weight:500}button:hover{background:color-mix(in srgb,var(--primary-color,#03a9f4) 8%,transparent)}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--primary-color,#03a9f4);outline-offset:2px}button.primary{background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff)}button.danger{color:var(--error-color,#db4437)}
       .card-top{display:flex;align-items:stretch;border-bottom:1px solid var(--divider-color,#e0e0e0);min-height:52px}nav{display:flex;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;padding:0 8px}nav::-webkit-scrollbar{display:none}nav button{flex-shrink:0;border-radius:0;border-bottom:2px solid transparent;color:var(--secondary-text-color,#727272);padding:16px 14px;white-space:nowrap;font-size:14px}nav button.selected{border-bottom-color:var(--primary-color,#03a9f4);color:var(--primary-color,#03a9f4)}.settings-button{width:50px;flex-shrink:0;display:grid;place-items:center;padding:12px;border-radius:0;color:var(--secondary-text-color,#727272)}.settings-button.selected{color:var(--primary-color,#03a9f4);background:color-mix(in srgb,var(--primary-color,#03a9f4) 8%,transparent)}.settings-button svg{width:23px;height:23px;fill:currentColor}
       main{padding:8px 16px 16px}.page-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 0}.page-actions h2{font-size:18px;font-weight:500;margin:0}.import-control{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--divider-color,#e0e0e0);font-size:13px;color:var(--secondary-text-color,#727272)}.import-control input{max-width:56%;font-size:12px}.toolbar{display:flex;align-items:center;gap:8px}.week{display:flex;justify-content:space-between;align-items:center;margin:8px 0 12px}.days{display:grid;gap:0}.day{display:grid;grid-template-columns:54px minmax(0,1fr) auto;align-items:center;gap:12px;padding:10px 2px;border-bottom:1px solid var(--divider-color,#e0e0e0);min-height:72px}.day:first-child{border-top:1px solid var(--divider-color,#e0e0e0)}.date{display:grid;text-align:center;gap:3px}.date b{font-size:14px;font-weight:600}.date small,.meal-main small,.day-main small,.hint{font-size:12px;line-height:1.5;color:var(--secondary-text-color,#727272)}.day-content{display:grid;justify-items:start;min-width:0;gap:2px}.day-main{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:0;padding:4px 0;text-align:left;color:var(--primary-text-color,#212121);border-radius:4px}.day-main strong{font-size:15px;font-weight:500;overflow-wrap:anywhere}.day.empty .day-main strong{color:var(--secondary-text-color,#727272);font-weight:400}.meal-link{color:var(--primary-color,#03a9f4);font-size:12px}.day-actions{display:flex;gap:0}.icon-button{display:grid;place-items:center;width:40px;height:40px;padding:6px;font-size:18px}.icon-button.add{font-size:23px}.icon-button.danger,.row-actions .danger{color:var(--error-color,#db4437)}
-      .notice{position:fixed;z-index:10001;top:calc(10px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);max-width:min(560px,calc(100% - 24px));padding:10px 12px;margin:8px 0;border-radius:8px;background:var(--secondary-background-color,#f5f5f5);color:var(--primary-text-color,#212121)}.notice.error{background:var(--error-color,#db4437);color:#fff}.empty-state{padding:24px 10px;text-align:center;color:var(--secondary-text-color,#727272)}.history{margin:8px 0 0;padding-left:20px;max-height:260px;overflow:auto;font-size:12px;color:var(--secondary-text-color,#727272)}details{border-top:1px solid var(--divider-color,#e0e0e0);margin-top:12px;padding:12px 0 0}summary{cursor:pointer;color:var(--secondary-text-color,#727272)}
-      .meal-row{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 0;border-bottom:1px solid var(--divider-color,#e0e0e0)}.meal-main{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0}.meal-main strong{font-size:15px;font-weight:500;overflow-wrap:anywhere}.tag{font-size:11px;padding:3px 8px;border-radius:12px}.tag.meat{background:color-mix(in srgb,var(--warning-color,#ff9800) 14%,transparent);color:var(--warning-color,#ef6c00)}.tag.veg{background:color-mix(in srgb,var(--success-color,#4caf50) 14%,transparent);color:var(--success-color,#388e3c)}.row-actions{display:flex;gap:2px;flex-shrink:0}.row-actions button{padding:8px}
-      .overlay{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:16px;background:rgba(0,0,0,.42)}.dialog{width:min(560px,100%);max-height:min(90vh,780px);overflow:auto;background:var(--ha-card-background,var(--card-background-color,#fff));color:var(--primary-text-color,#212121);border-radius:16px;box-shadow:0 12px 40px #0004;padding:20px}.dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}.dialog-head h2{font-size:20px;font-weight:500;margin:0}.close{font-size:23px;width:38px;height:38px;padding:4px}.form-grid{display:grid;gap:14px}.field{display:grid;gap:6px}.field>span,.group-label{font-size:13px;font-weight:500}.field input[type=text],.field input[type=url],.field select,.search-select{width:100%;min-height:44px;border:1px solid var(--divider-color,#ccc);border-radius:8px;padding:10px 12px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#212121)}.choice-row,.check-grid{display:flex;flex-wrap:wrap;gap:8px}.choice,.person-choice{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--divider-color,#ddd);border-radius:22px;padding:9px 12px;cursor:pointer}.choice:has(input:checked),.person-choice:has(input:checked){border-color:var(--primary-color,#03a9f4);background:color-mix(in srgb,var(--primary-color,#03a9f4) 9%,transparent)}input[type=checkbox],input[type=radio]{accent-color:var(--primary-color,#03a9f4);width:16px;height:16px;margin:0}.saved-meal-picker{display:grid;gap:8px}.saved-meal-picker select{max-height:260px}.check-grid{margin-top:8px}.dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;padding-top:12px;border-top:1px solid var(--divider-color,#e0e0e0)}.dialog .hint{margin-top:-4px}.confirm-copy{font-size:14px;line-height:1.5}
+      .notice{position:fixed;z-index:10001;top:calc(10px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);max-width:min(560px,calc(100% - 24px));padding:10px 12px;margin:8px 0;border-radius:8px;background:var(--secondary-background-color,#f5f5f5);color:var(--primary-text-color,#212121)}.notice.error{background:var(--error-color,#db4437);color:#fff}.form-notice{position:static;transform:none;max-width:none;margin:0 0 14px}.empty-state{padding:24px 10px;text-align:center;color:var(--secondary-text-color,#727272)}.history{margin:8px 0 0;padding-left:20px;max-height:260px;overflow:auto;font-size:12px;color:var(--secondary-text-color,#727272)}details{border-top:1px solid var(--divider-color,#e0e0e0);margin-top:12px;padding:12px 0 0}summary{cursor:pointer;color:var(--secondary-text-color,#727272)}
+      .meal-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--divider-color,#e0e0e0)}.meal-main{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0}.meal-main strong{font-size:15px;font-weight:500;overflow-wrap:anywhere}.tag{font-size:11px;padding:3px 8px;border-radius:12px}.tag.meat{background:color-mix(in srgb,var(--warning-color,#ff9800) 14%,transparent);color:var(--warning-color,#ef6c00)}.tag.veg{background:color-mix(in srgb,var(--success-color,#4caf50) 14%,transparent);color:var(--success-color,#388e3c)}.row-actions{display:flex;gap:2px;flex-shrink:0}.row-actions button{padding:5px 8px;font-size:12px}.random-view{max-width:680px}.random-people{margin:8px 0 18px}.random-buttons{display:flex;gap:8px;flex-wrap:wrap}.suggestion{display:grid;gap:12px;margin-top:18px;padding:16px;border:1px solid var(--divider-color,#ddd);border-radius:12px;background:var(--secondary-background-color,#f8f8f8)}.suggestion .meal-main strong{font-size:18px}
+      .overlay{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:16px;background:rgba(0,0,0,.42)}.dialog{width:min(560px,100%);max-height:min(90vh,780px);overflow:auto;background:var(--ha-card-background,var(--card-background-color,#fff));color:var(--primary-text-color,#212121);border-radius:16px;box-shadow:0 12px 40px #0004;padding:20px}.dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}.dialog-head h2{font-size:20px;font-weight:500;margin:0}.close{font-size:23px;width:38px;height:38px;padding:4px}.form-grid{display:grid;gap:14px}.field{display:grid;gap:6px}.field>span,.group-label{font-size:13px;font-weight:500}.field input[type=text],.field input[type=url],.field select,.search-select{width:100%;min-height:44px;border:1px solid var(--divider-color,#ccc);border-radius:8px;padding:10px 12px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#212121)}.choice-row,.check-grid{display:flex;flex-wrap:wrap;gap:8px}.choice,.person-choice{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--divider-color,#ddd);border-radius:22px;padding:9px 12px;cursor:pointer}.choice:has(input:checked),.person-choice:has(input:checked){border-color:var(--primary-color,#03a9f4);background:color-mix(in srgb,var(--primary-color,#03a9f4) 9%,transparent)}input[type=checkbox],input[type=radio]{accent-color:var(--primary-color,#03a9f4);width:16px;height:16px;margin:0}.saved-meal-picker{display:grid;gap:8px}.meal-combobox{position:relative}.meal-options{position:absolute;z-index:4;top:calc(100% + 4px);left:0;right:0;max-height:280px;overflow:auto;border:1px solid var(--divider-color,#ccc);border-radius:10px;background:var(--ha-card-background,var(--card-background-color,#fff));box-shadow:0 8px 24px #0003;padding:4px}.meal-options[hidden]{display:none}.meal-option{display:flex;width:100%;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 12px;border-radius:7px;text-align:left;color:var(--primary-text-color,#212121)}.meal-option:hover{background:var(--secondary-background-color,#f5f5f5)}.meal-option strong{font-weight:500}.meal-option small,.meal-options-empty{font-size:12px;color:var(--secondary-text-color,#727272)}.meal-options-empty{padding:12px}.check-grid{margin-top:8px}.dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;padding-top:12px;border-top:1px solid var(--divider-color,#e0e0e0)}.dialog .hint{margin-top:-4px}.confirm-copy{font-size:14px;line-height:1.5}
       @media(max-width:520px){main{padding:6px 12px 12px}.day{grid-template-columns:44px minmax(0,1fr) auto;gap:8px;min-height:68px}.icon-button{width:34px;height:38px}.row-actions{flex-direction:column;align-items:flex-end}.dialog{padding:16px}.tabs button{padding:15px 12px}}
-    </style><ha-card><div class="card-top"><nav aria-label="Essensplaner"><button data-action="view" data-view="week" class="${this._view === 'week' ? 'selected' : ''}">Essensplan</button></nav><button class="settings-button ${this._view === 'settings' ? 'selected' : ''}" data-action="view" data-view="settings" aria-label="Einstellungen" title="Einstellungen" aria-current="${this._view === 'settings' ? 'page' : 'false'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.2 7.2 0 0 0-1.63-.94l-.36-2.54A.49.49 0 0 0 13.88 2h-3.76a.49.49 0 0 0-.49.42L9.27 4.96c-.59.23-1.13.55-1.63.94l-2.39-.96a.5.5 0 0 0-.61.22L2.72 8.48a.5.5 0 0 0 .12.64l2.03 1.58a6.8 6.8 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .61.22l2.39-.96c.5.39 1.04.71 1.63.94l.36 2.54a.49.49 0 0 0 .49.42h3.76a.49.49 0 0 0 .49-.42l.36-2.54c.59-.23 1.13-.55 1.63-.94l2.39.96a.5.5 0 0 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg></button></div><main>
-      ${this._view === 'week' ? `<div class="week"><button data-action="shift" data-shift="-1" aria-label="Vorherige Woche">‹</button><strong>${this.weekLabel(a.week_start, a.week_end)}</strong><button data-action="today">Heute</button><button data-action="shift" data-shift="1" aria-label="Nächste Woche">›</button></div><div class="days">${dayRows || `<div class="empty-state">${state ? 'Für diese Woche sind keine Einträge verfügbar.' : 'Der Wochenplan-Sensor ist nicht geladen. Bitte Integration und Home-Assistant-Protokoll prüfen.'}</div>`}</div><details><summary>Änderungsverlauf</summary><ul class="history">${(a.history || []).map((h) => `<li>${this.esc(h.by)} · ${this.esc(h.action)} · ${this.esc(h.date)}${h.after ? ': ' + this.esc(h.after) : ''}</li>`).join('') || '<li>Noch keine Änderungen.</li>'}</ul></details>` : `<div class="page-actions"><h2>Gerichte</h2><button class="primary" data-action="new-meal">+ Gericht hinzufügen</button></div><p class="hint">Hier pflegst du eure gespeicherten Gerichte und die Personen, die sie gern essen.</p><label class="import-control">Gerichte aus der Site übernehmen <input data-import type="file" accept="application/json,.json"></label><div class="meal-list">${mealRows || '<div class="empty-state">Noch keine Gerichte gespeichert. Importiere eine JSON-Datei oder füge ein Gericht hinzu.</div>'}</div>`}
+    </style><ha-card><div class="card-top"><nav aria-label="Essensplaner"><button data-action="view" data-view="week" class="${this._view === 'week' ? 'selected' : ''}">Essensplan</button><button data-action="view" data-view="random" class="${this._view === 'random' ? 'selected' : ''}">Zufallsrezept</button></nav>${this.isManager() ? `<button class="settings-button ${this._view === 'settings' ? 'selected' : ''}" data-action="view" data-view="settings" aria-label="Einstellungen" title="Einstellungen" aria-current="${this._view === 'settings' ? 'page' : 'false'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.2 7.2 0 0 0-1.63-.94l-.36-2.54A.49.49 0 0 0 13.88 2h-3.76a.49.49 0 0 0-.49.42L9.27 4.96c-.59.23-1.13.55-1.63.94l-2.39-.96a.5.5 0 0 0-.61.22L2.72 8.48a.5.5 0 0 0 .12.64l2.03 1.58a6.8 6.8 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .61.22l2.39-.96c.5.39 1.04.71 1.63.94l.36 2.54a.49.49 0 0 0 .49.42h3.76a.49.49 0 0 0 .49-.42l.36-2.54c.59.23 1.13.55 1.63.94l2.39.96a.5.5 0 0 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg></button>` : ''}</div><main>
+      ${this._view === 'week' ? `<div class="week"><button data-action="shift" data-shift="-1" aria-label="Vorherige Woche">‹</button><strong>${this.weekLabel(weekStart, weekEnd)}</strong><button data-action="today">Heute</button><button data-action="shift" data-shift="1" aria-label="Nächste Woche">›</button></div><div class="days">${dayRows || `<div class="empty-state">${requestedWeek ? 'Kalenderwoche wird geladen …' : state ? 'Für diese Woche sind keine Einträge verfügbar.' : 'Der Wochenplan-Sensor ist nicht geladen. Bitte Integration und Home-Assistant-Protokoll prüfen.'}</div>`}</div><details><summary>Änderungsverlauf</summary><ul class="history">${(a.history || []).map((h) => `<li>${this.esc(h.by)} · ${this.esc(h.action)} · ${this.esc(h.date)}${h.after ? ': ' + this.esc(h.after) : ''}</li>`).join('') || '<li>Noch keine Änderungen.</li>'}</ul></details>` : this._view === 'random' ? randomMarkup : `<div class="page-actions"><h2>Gerichte</h2><button class="primary" data-action="new-meal">+ Gericht hinzufügen</button></div><p class="hint">Hier pflegst du eure gespeicherten Gerichte und die Personen, die sie gern essen.</p><label class="import-control">Gerichte aus der Site übernehmen <input data-import type="file" accept="application/json,.json"></label><div class="meal-list">${mealRows || '<div class="empty-state">Noch keine Gerichte gespeichert. Importiere eine JSON-Datei oder füge ein Gericht hinzu.</div>'}</div>`}
       ${this._notice ? `<div class="notice ${this._noticeError ? 'error' : ''}" role="status">${this.esc(this._notice)}</div>` : ''}
       ${this._modal ? this.renderModal(meals) : ''}
     </main></ha-card>`;
     this.shadowRoot.querySelectorAll('[data-action="view"]').forEach((b) => b.onclick = () => { this._view = b.dataset.view; this._modal = null; this.render(); });
     this.shadowRoot.querySelectorAll('[data-action]').forEach((b) => b.onclick = (event) => { event.stopPropagation(); this.action(b.dataset.action, b.dataset); });
     this.shadowRoot.querySelectorAll('[data-stop]').forEach((el) => el.onclick = (event) => event.stopPropagation());
+    this.shadowRoot.querySelectorAll('[data-random-person]').forEach((input) => input.onchange = () => { this._randomPeople = [...this.shadowRoot.querySelectorAll('[data-random-person]:checked')].map((el) => el.dataset.randomPerson); this._suggestion = null; });
     this.shadowRoot.querySelectorAll('.day').forEach((el) => el.onclick = () => this.openDay(el.dataset.day));
     const saveToggle = this.shadowRoot.querySelector('[data-field="save-to-catalog"]');
-    if (saveToggle) saveToggle.onchange = () => { this._modal.saveToCatalog = saveToggle.checked; this.render(); };
+    if (saveToggle) saveToggle.onchange = () => { this._modal.saveToCatalog = saveToggle.checked; const extra = this.shadowRoot.querySelector('.catalog-extra'); if (extra) extra.hidden = !saveToggle.checked; };
+    const freeText = this.shadowRoot.querySelector('[data-field="text"]');
+    if (freeText) freeText.oninput = () => { this._modal.freeText = freeText.value; };
+    const linkField = this.shadowRoot.querySelector('[data-field="link"]');
+    if (linkField) linkField.oninput = () => { this._modal.link = linkField.value; };
+    const mealSearch = this.shadowRoot.querySelector('[data-field="meal-search"]');
+    if (mealSearch) {
+      const optionList = this.shadowRoot.querySelector('.meal-options');
+      mealSearch.onfocus = () => { if (optionList) optionList.hidden = false; mealSearch.setAttribute('aria-expanded', 'true'); this._modal.mealDropdownOpen = true; };
+      mealSearch.oninput = () => {
+        this._modal.mealName = mealSearch.value;
+        this._modal.mealId = null;
+        this._modal.mealDropdownOpen = true;
+        if (optionList) { optionList.hidden = false; optionList.querySelectorAll('.meal-option').forEach((option) => { option.hidden = !option.dataset.name.toLocaleLowerCase().includes(mealSearch.value.trim().toLocaleLowerCase()); }); }
+        mealSearch.setAttribute('aria-expanded', 'true');
+      };
+    }
     const file = this.shadowRoot.querySelector('[data-import]');
     if (file) file.onchange = async () => { const selected = file.files?.[0]; if (!selected) return; try { const catalog = JSON.parse(await selected.text()); await this.call('import_catalog', { catalog }); this.notify(`${Array.isArray(catalog.meals) ? catalog.meals.length : 'Die'} Gerichte wurden übernommen.`); } catch (error) { this.notify(error.message || 'Import fehlgeschlagen.', true); } file.value = ''; };
     this.bindSwipe();
@@ -76,9 +135,10 @@ class EssensplanerCard extends HTMLElement {
     const entry = modal.entry || {};
     const edit = Boolean(entry.title);
     const free = modal.kind !== 'saved';
-    const selectedMeal = meals.find((m) => m.id === entry.meal_id) || null;
-    const selectedName = selectedMeal?.name || '';
-    return `<div class="overlay"><section class="dialog" role="dialog" aria-modal="true"><div class="dialog-head"><h2>${edit ? 'Eintrag bearbeiten' : 'Essen einplanen'}</h2><button class="close" data-action="close-modal" aria-label="Schließen">×</button></div><div class="form-grid"><div class="field"><span>Für ${this.esc(new Date(date + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' }))}</span><div class="choice-row"><label class="choice"><input type="radio" name="plan-kind" value="free" data-action="plan-kind" ${free ? 'checked' : ''}> Frei eintragen</label><label class="choice"><input type="radio" name="plan-kind" value="saved" data-action="plan-kind" ${free ? '' : 'checked'}> Aus Gerichten wählen</label></div></div>${free ? `<label class="field"><span>Mahlzeit</span><input type="text" data-field="text" value="${this.esc(modal.freeText ?? (entry.title || ''))}" maxlength="240" placeholder="Essen eintragen" autocomplete="off"></label><label class="field"><span>Link (optional)</span><input type="url" data-field="link" value="${this.esc(modal.link ?? (entry.link || ''))}" placeholder="https://…" inputmode="url"></label><label class="person-choice"><input type="checkbox" data-field="save-to-catalog" ${modal.saveToCatalog ? 'checked' : ''}> Auch in Gerichte speichern</label><div class="catalog-extra" ${modal.saveToCatalog ? '' : 'hidden'}><div class="field"><span>Art des Gerichts</span><div class="choice-row"><label class="choice"><input type="radio" name="new-meal-type" value="veg" checked> Vegetarisch</label><label class="choice"><input type="radio" name="new-meal-type" value="meat"> Mit Fleisch</label></div></div><div class="field"><span class="group-label">Wer isst es gern?</span><div class="check-grid">${['Vera', 'Manuel', 'Maximilian', 'Paul'].map((person) => `<label class="person-choice"><input type="checkbox" data-new-eater="${person}" ${['Vera', 'Manuel', 'Paul'].includes(person) ? 'checked' : ''}> ${person}</label>`).join('')}</div></div></div>` : `<div class="field saved-meal-picker"><span>Gericht suchen und auswählen</span><input class="search-select" data-field="meal-search" list="meal-options" value="${this.esc(modal.mealName ?? selectedName)}" placeholder="Gericht eingeben oder Liste öffnen" autocomplete="off"><datalist id="meal-options">${meals.map((m) => `<option value="${this.esc(m.name)}"></option>`).join('')}</datalist><small class="hint">Beim Öffnen stehen alle gespeicherten Gerichte zur Auswahl. Tippe zum Filtern.</small></div><label class="field"><span>Link (optional)</span><input type="url" data-field="link" value="${this.esc(entry.link || '')}" placeholder="https://…" inputmode="url"></label>`}</div><div class="dialog-actions"><button data-action="close-modal">Abbrechen</button><button class="primary" data-action="save-day">Einplanen</button></div></section></div>`;
+    const selectedMeal = meals.find((m) => m.id === (modal.mealId || entry.meal_id)) || null;
+    const selectedName = modal.mealName ?? selectedMeal?.name ?? '';
+    const optionsOpen = Boolean(modal.mealDropdownOpen);
+    return `<div class="overlay"><section class="dialog" role="dialog" aria-modal="true"><div class="dialog-head"><h2>${edit ? 'Eintrag bearbeiten' : 'Essen einplanen'}</h2><button class="close" data-action="close-modal" aria-label="Schließen">×</button></div><div class="form-grid"><div class="field"><span>Für ${this.esc(new Date(date + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' }))}</span><div class="choice-row"><label class="choice"><input type="radio" name="plan-kind" value="free" data-action="plan-kind" ${free ? 'checked' : ''}> Frei eintragen</label><label class="choice"><input type="radio" name="plan-kind" value="saved" data-action="plan-kind" ${free ? '' : 'checked'}> Aus Gerichten wählen</label></div></div>${free ? `<label class="field"><span>Mahlzeit</span><input type="text" data-field="text" value="${this.esc(modal.freeText ?? (entry.title || ''))}" maxlength="240" placeholder="Essen eintragen" autocomplete="off"></label><label class="field"><span>Link (optional)</span><input type="url" data-field="link" value="${this.esc(modal.link ?? (entry.link || ''))}" placeholder="https://…" inputmode="url"></label><label class="person-choice"><input type="checkbox" data-field="save-to-catalog" ${modal.saveToCatalog ? 'checked' : ''}> Auch in Gerichte speichern</label><div class="catalog-extra" ${modal.saveToCatalog ? '' : 'hidden'}><div class="field"><span>Art des Gerichts</span><div class="choice-row"><label class="choice"><input type="radio" name="new-meal-type" value="veg" ${(modal.newMeat ?? false) ? '' : 'checked'}> Vegetarisch</label><label class="choice"><input type="radio" name="new-meal-type" value="meat" ${(modal.newMeat ?? false) ? 'checked' : ''}> Mit Fleisch</label></div></div><div class="field"><span class="group-label">Wer isst es gern?</span><div class="check-grid">${['Vera', 'Manuel', 'Maximilian', 'Paul'].map((person) => `<label class="person-choice"><input type="checkbox" data-new-eater="${person}" ${(modal.newEaters || ['Vera', 'Manuel', 'Paul']).includes(person) ? 'checked' : ''}> ${person}</label>`).join('')}</div></div></div>` : `<div class="field saved-meal-picker"><span>Gericht suchen und auswählen</span><div class="meal-combobox"><input class="search-select" data-field="meal-search" value="${this.esc(selectedName)}" placeholder="Gericht eingeben oder Liste öffnen" autocomplete="off" aria-haspopup="listbox" aria-expanded="${optionsOpen}"><div class="meal-options" role="listbox" ${optionsOpen ? '' : 'hidden'}>${meals.map((m) => `<button type="button" class="meal-option" role="option" data-action="select-meal" data-id="${this.esc(m.id)}" data-name="${this.esc(m.name)}"><strong>${this.esc(m.name)}</strong><small>${m.meat ? 'Mit Fleisch' : 'Vegetarisch'} · Isst gern: ${this.esc((m.eaters || []).join(', '))}</small></button>`).join('') || '<div class="meal-options-empty">Noch keine Gerichte gespeichert.</div>'}</div></div><small class="hint">Beim Öffnen erscheinen alle Gerichte. Tippe zum Filtern.</small></div><label class="field"><span>Link (optional)</span><input type="url" data-field="link" value="${this.esc(entry.link || '')}" placeholder="https://…" inputmode="url"></label>`}</div><div class="dialog-actions"><button data-action="close-modal">Abbrechen</button><button class="primary" data-action="save-day">Einplanen</button></div></section></div>`;
   }
 
   bindSwipe() {
@@ -90,37 +150,75 @@ class EssensplanerCard extends HTMLElement {
       if (!start || !event.changedTouches.length) return;
       const dx = event.changedTouches[0].clientX - start[0]; const dy = event.changedTouches[0].clientY - start[1]; start = null;
       const a = this.getState()?.attributes || {};
-      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.2) { const day = new Date((a.week_start || new Date().toISOString().slice(0, 10)) + 'T12:00:00'); day.setDate(day.getDate() + (dx < 0 ? 7 : -7)); this.call('show_week', { date: day.toISOString().slice(0, 10) }).catch((e) => this.notify(e.message, true)); }
-      else if (dy > 70 && Math.abs(dy) > Math.abs(dx) * 1.2) this.call('show_week', { date: a.week_start }).catch((e) => this.notify(e.message, true));
+      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.2) this.shiftWeek(dx < 0 ? 1 : -1);
+      else if (dy > 70 && Math.abs(dy) > Math.abs(dx) * 1.2) this.action('today', {});
     }, { passive: true });
   }
 
-  notify(message, error = false) { this._notice = message; this._noticeError = error; this.render(); }
+  notify(message, error = false) {
+    this._notice = message; this._noticeError = error;
+    const dialog = this.shadowRoot?.querySelector('.dialog');
+    if (this._modal && dialog) {
+      let notice = dialog.querySelector('.form-notice');
+      if (!notice) { notice = document.createElement('div'); notice.className = 'notice form-notice'; dialog.querySelector('.dialog-head')?.after(notice); }
+      notice.textContent = message; notice.classList.toggle('error', error); return;
+    }
+    this.render();
+  }
   openDay(date) {
     const state = this.getState()?.attributes || {};
     const entry = (state.days || []).find((d) => d.date === date)?.entry || {};
-    this._modal = { type: 'day', date, entry, kind: entry.meal_id ? 'saved' : 'free', saveToCatalog: false };
+    const savedMeal = (state.meals || []).find((meal) => meal.id === entry.meal_id);
+    const pending = this._pendingMeal;
+    this._modal = { type: 'day', date, entry, kind: pending || entry.meal_id ? 'saved' : 'free', mealId: pending?.id || entry.meal_id || null, mealName: pending?.name || savedMeal?.name || '', mealDropdownOpen: false, freeText: entry.meal_id || pending ? '' : (entry.title || ''), link: entry.link || '', saveToCatalog: false };
     this.render();
     this.shadowRoot.querySelector('[data-field="text"]')?.focus();
   }
   async action(action, data) {
-    if (action === 'view') { this._view = data.view; this._modal = null; this._notice = ''; this.render(); return; }
-    if (action === 'shift' || action === 'today') {
-      const attr = this.getState()?.attributes || {};
-      const date = action === 'today' ? new Date().toISOString().slice(0, 10) : (() => { const d = new Date((attr.week_start || new Date().toISOString().slice(0, 10)) + 'T12:00:00'); d.setDate(d.getDate() + Number(data.shift) * 7); return d.toISOString().slice(0, 10); })();
-      try { await this.call('show_week', { date }); } catch (e) { this.notify(e.message, true); } return;
+    if (action === 'view') { if (data.view === 'settings' && !this.isManager()) return; this._view = data.view; this._modal = null; this._notice = ''; this.render(); return; }
+    if (action === 'shift') { this.shiftWeek(Number(data.shift)); return; }
+    if (action === 'today') {
+      const date = this.dateKey(new Date());
+      this._weekRequested = this.mondayOf(date);
+      this.render();
+      try { await this.call('show_week', { date }); } catch (error) { this._weekRequested = null; this.notify(error.message || 'Kalenderwoche konnte nicht geladen werden.', true); }
+      return;
     }
     if (action === 'open-day') { this.openDay(data.date); return; }
+    if (action === 'suggest' || action === 'another') {
+      const selected = this._randomPeople || [];
+      if (!selected.length) { this.notify('Bitte mindestens eine mitessende Person auswählen.', true); return; }
+      let candidates = (this.getState()?.attributes?.meals || []).filter((meal) => (!meal.meat || !selected.includes('Maximilian')) && selected.every((person) => (meal.eaters || []).includes(person)) && !this._shownSuggestionIds.includes(meal.id));
+      if (!candidates.length && this._shownSuggestionIds.length) { this._shownSuggestionIds = []; candidates = (this.getState()?.attributes?.meals || []).filter((meal) => (!meal.meat || !selected.includes('Maximilian')) && selected.every((person) => (meal.eaters || []).includes(person))); }
+      if (!candidates.length) { this._suggestion = null; this.notify('Kein passendes gespeichertes Gericht für diese Auswahl gefunden.', true); return; }
+      const absentees = ['Vera', 'Manuel', 'Maximilian', 'Paul'].filter((person) => !selected.includes(person));
+      const ranked = candidates.map((meal) => ({ meal, misses: absentees.filter((person) => !(meal.eaters || []).includes(person)).length })).sort((x, y) => y.misses - x.misses || (selected.includes('Maximilian') ? 0 : Number(y.meal.meat) - Number(x.meal.meat)));
+      const best = ranked.filter((item) => item.misses === ranked[0].misses && (selected.includes('Maximilian') || Boolean(item.meal.meat) === Boolean(ranked[0].meal.meat)));
+      const chosen = best[Math.floor(Math.random() * best.length)].meal;
+      this._suggestion = { meal: chosen, reason: `Passt zu ${selected.join(', ')}. ${absentees.length ? 'Personen, die heute nicht mitessen, sind beim Vorschlag berücksichtigt.' : 'Alle essen mit.'}` };
+      this._shownSuggestionIds.push(chosen.id); this.render(); return;
+    }
+    if (action === 'plan-suggestion') { if (!this._suggestion?.meal) return; this._pendingMeal = this._suggestion.meal; this._view = 'week'; this._notice = 'Wähle den Tag, an dem du das Gericht einplanen möchtest.'; this._noticeError = false; this.render(); return; }
+    if (action === 'select-meal') {
+      this._modal.mealId = data.id; this._modal.mealName = data.name; this._modal.mealDropdownOpen = false;
+      const search = this.shadowRoot.querySelector('[data-field="meal-search"]');
+      if (search) { search.value = data.name; search.setAttribute('aria-expanded', 'false'); }
+      const list = this.shadowRoot.querySelector('.meal-options'); if (list) list.hidden = true;
+      return;
+    }
     if (action === 'new-meal') { this._modal = { type: 'meal', meal: null }; this.render(); this.shadowRoot.querySelector('[data-field="name"]')?.focus(); return; }
     if (action === 'edit-meal') { const meal = (this.getState()?.attributes.meals || []).find((m) => m.id === data.id); if (meal) { this._modal = { type: 'meal', meal: { ...meal, eaters: [...(meal.eaters || [])] } }; this.render(); this.shadowRoot.querySelector('[data-field="name"]')?.focus(); } return; }
     if (action === 'confirm-delete-meal') { const meal = (this.getState()?.attributes.meals || []).find((m) => m.id === data.id); if (meal) { this._modal = { type: 'meal-confirm', meal }; this.render(); } return; }
     if (action === 'confirm-delete-day') { this._modal = { type: 'day-confirm', date: data.date }; this.render(); return; }
     if (action === 'close-modal' || action === 'overlay-close') { if (action === 'overlay-close' && event?.target !== event?.currentTarget) return; this._modal = null; this.render(); return; }
     if (action === 'plan-kind') {
-      this._modal.freeText = this.shadowRoot.querySelector('[data-field="text"]')?.value || this._modal.freeText || '';
-      this._modal.mealName = this.shadowRoot.querySelector('[data-field="meal-search"]')?.value || this._modal.mealName || '';
-      this._modal.link = this.shadowRoot.querySelector('[data-field="link"]')?.value || '';
-      this._modal.saveToCatalog = this.shadowRoot.querySelector('[data-field="save-to-catalog"]')?.checked || false;
+      this._modal.freeText = this.shadowRoot.querySelector('[data-field="text"]')?.value ?? this._modal.freeText ?? '';
+      this._modal.mealName = this.shadowRoot.querySelector('[data-field="meal-search"]')?.value ?? this._modal.mealName ?? '';
+      this._modal.link = this.shadowRoot.querySelector('[data-field="link"]')?.value ?? this._modal.link ?? '';
+      this._modal.mealId = this._modal.mealId || null;
+      this._modal.saveToCatalog = this.shadowRoot.querySelector('[data-field="save-to-catalog"]')?.checked ?? this._modal.saveToCatalog ?? false;
+      this._modal.newMeat = this.shadowRoot.querySelector('[name="new-meal-type"]:checked')?.value === 'meat';
+      this._modal.newEaters = [...this.shadowRoot.querySelectorAll('[data-new-eater]:checked')].map((e) => e.dataset.newEater);
       this._modal.kind = data.value; this.render(); return;
     }
     if (action === 'save-meal') { await this.saveMeal(); return; }
@@ -145,8 +243,7 @@ class EssensplanerCard extends HTMLElement {
     const kind = this.shadowRoot.querySelector('[name="plan-kind"]:checked')?.value || modal.kind;
     const payload = { date: modal.date };
     if (kind === 'saved') {
-      const name = this.shadowRoot.querySelector('[data-field="meal-search"]')?.value.trim() || '';
-      const meal = (state.meals || []).find((m) => m.name.toLocaleLowerCase() === name.toLocaleLowerCase());
+      const meal = (state.meals || []).find((m) => m.id === modal.mealId);
       if (!meal) { this.notify('Bitte ein gespeichertes Gericht aus der Liste auswählen.', true); return; }
       payload.meal_id = meal.id;
     } else {
@@ -162,7 +259,7 @@ class EssensplanerCard extends HTMLElement {
       } else payload.text = text;
     }
     if (link) payload.link = link;
-    try { await this.call('plan_day', payload); this._modal = null; this._notice = 'Essen eingeplant.'; this._noticeError = false; this.render(); }
+    try { await this.call('plan_day', payload); this._pendingMeal = null; this._modal = null; this._notice = 'Essen eingeplant.'; this._noticeError = false; this.render(); }
     catch (error) { this.notify(error.message || 'Essen konnte nicht eingeplant werden.', true); }
   }
 
