@@ -1,4 +1,4 @@
-const ESSENSPLANER_VERSION = '1.2.1';
+const ESSENSPLANER_VERSION = '1.2.2';
 
 class EssensplanerCard extends HTMLElement {
   setConfig(config) {
@@ -44,6 +44,7 @@ class EssensplanerCard extends HTMLElement {
   }
   icon(name) {
     const paths = {
+      expand: 'M7 10l5 5 5-5z',
       edit: 'M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z',
       delete: 'M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z',
       download: 'M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z',
@@ -108,7 +109,7 @@ class EssensplanerCard extends HTMLElement {
       return `<article class="day ${entry ? 'planned' : 'empty'}" data-day="${d.date}">
         <div class="date"><b>${['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'][index]}</b><small>${new Date(d.date + 'T12:00:00').toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}</small></div>
         <div class="day-content"><button class="day-main" data-action="open-day" data-date="${d.date}"><strong>${entry ? this.esc(entry.title) : 'Essen einplanen'}</strong><small>${entry ? `Eingetragen von ${this.esc(entry.planned_by)}${entry.planned_at ? ` · ${this.time(entry.planned_at)}` : ''}` : 'Tippen zum Eintragen'}</small></button>${entry?.link ? `<a class="meal-link" href="${this.esc(entry.link)}" target="_blank" rel="noopener" data-stop>Link ↗</a>` : ''}</div>
-        <div class="day-actions">${entry ? `<button class="icon-button" data-action="open-day" data-date="${d.date}" aria-label="Bearbeiten" title="Bearbeiten">✎</button>${this.canDeleteEntry(entry) ? `<button class="icon-button danger" data-action="confirm-delete-day" data-date="${d.date}" aria-label="Eintrag löschen" title="Eintrag löschen">${this.icon('delete')}</button>` : ''}` : `<button class="icon-button add" data-action="open-day" data-date="${d.date}" aria-label="Essen einplanen" title="Essen einplanen">+</button>`}</div>
+        <div class="day-actions">${entry ? `<button class="icon-button" data-action="open-day" data-date="${d.date}" aria-label="Bearbeiten" title="Bearbeiten">${this.icon('edit')}</button>${this.canDeleteEntry(entry) ? `<button class="icon-button danger" data-action="confirm-delete-day" data-date="${d.date}" aria-label="Eintrag löschen" title="Eintrag löschen">${this.icon('delete')}</button>` : ''}` : `<button class="icon-button add" data-action="open-day" data-date="${d.date}" aria-label="Essen einplanen" title="Essen einplanen">+</button>`}</div>
       </article>`;
     }).join('');
     const mealRows = meals.map((meal) => `<article class="meal-row"><div class="meal-main"><strong>${this.esc(meal.name)}</strong><span class="tag ${meal.meat ? 'meat' : 'veg'}">${meal.meat ? 'Mit Fleisch' : 'Vegetarisch'}</span><small>Isst gern: ${this.esc((meal.eaters || []).join(', ') || 'Keine Personen zugeordnet')}</small></div><div class="row-actions"><button data-action="edit-meal" data-id="${this.esc(meal.id)}" aria-label="Gericht bearbeiten" title="Gericht bearbeiten">${this.icon('edit')}</button><button class="danger" data-action="confirm-delete-meal" data-id="${this.esc(meal.id)}" aria-label="Gericht löschen" title="Gericht löschen">${this.icon('delete')}</button></div></article>`).join('');
@@ -122,6 +123,7 @@ class EssensplanerCard extends HTMLElement {
       .notice{position:fixed;z-index:10001;top:calc(10px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);max-width:min(560px,calc(100% - 24px));padding:10px 12px;margin:8px 0;border-radius:8px;background:var(--secondary-background-color,#f5f5f5);color:var(--primary-text-color,#212121)}.notice.error{background:var(--error-color,#db4437);color:#fff}.form-notice{position:static;transform:none;max-width:none;margin:0 0 14px}.empty-state{padding:24px 10px;text-align:center;color:var(--secondary-text-color,#727272)}
       .meal-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--divider-color,#e0e0e0)}.meal-main{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0}.meal-main strong{font-size:15px;font-weight:500;overflow-wrap:anywhere}.tag{font-size:11px;padding:3px 8px;border-radius:12px}.tag.meat{background:color-mix(in srgb,var(--warning-color,#ff9800) 14%,transparent);color:var(--warning-color,#ef6c00)}.tag.veg{background:color-mix(in srgb,var(--success-color,#4caf50) 14%,transparent);color:var(--success-color,#388e3c)}.row-actions{display:flex;gap:2px;flex-shrink:0}.row-actions button{display:grid;place-items:center;flex-shrink:0;width:40px;height:40px;padding:8px;border-radius:50%}.row-actions svg,.icon-button svg{width:22px;height:22px;fill:currentColor}.export-actions{display:flex;justify-content:flex-start;margin-top:12px}.export-actions button{display:inline-flex;align-items:center;gap:8px;padding:9px 12px}.export-actions svg{width:20px;height:20px;fill:currentColor}.version{margin-top:18px;padding-top:12px;border-top:1px solid var(--divider-color,#e0e0e0);font-size:12px;color:var(--secondary-text-color,#727272);text-align:right}.random-view{max-width:680px}.random-people{margin:8px 0 18px}.random-buttons{display:flex;gap:8px;flex-wrap:wrap}.suggestion{display:grid;gap:12px;margin-top:18px;padding:16px;border:1px solid var(--divider-color,#ddd);border-radius:12px;background:var(--secondary-background-color,#f8f8f8)}.suggestion .meal-main strong{font-size:18px}
       .overlay{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:16px;background:rgba(0,0,0,.42)}.dialog{width:min(560px,100%);max-height:min(90vh,780px);overflow:auto;background:var(--ha-card-background,var(--card-background-color,#fff));color:var(--primary-text-color,#212121);border-radius:16px;box-shadow:0 12px 40px #0004;padding:20px}.dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}.dialog-head h2{font-size:20px;font-weight:500;margin:0}.close{font-size:23px;width:38px;height:38px;padding:4px}.form-grid{display:grid;gap:14px}.field{display:grid;gap:6px}.field>span,.group-label{font-size:13px;font-weight:500}.field input[type=text],.field input[type=url],.field select,.search-select{width:100%;min-height:44px;border:1px solid var(--divider-color,#ccc);border-radius:8px;padding:10px 12px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#212121)}.choice-row,.check-grid{display:flex;flex-wrap:wrap;gap:8px}.choice,.person-choice{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--divider-color,#ddd);border-radius:22px;padding:9px 12px;cursor:pointer}.choice:has(input:checked),.person-choice:has(input:checked){border-color:var(--primary-color,#03a9f4);background:color-mix(in srgb,var(--primary-color,#03a9f4) 9%,transparent)}input[type=checkbox],input[type=radio]{accent-color:var(--primary-color,#03a9f4);width:16px;height:16px;margin:0}.saved-meal-picker{display:grid;gap:8px}.saved-meal-picker select{width:100%;min-height:48px;padding:10px 12px;border:1px solid var(--divider-color,#ccc);border-radius:8px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#212121);font:inherit}.check-grid{margin-top:8px}.dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;padding-top:12px;border-top:1px solid var(--divider-color,#e0e0e0)}.dialog .hint{margin-top:-4px}.confirm-copy{font-size:14px;line-height:1.5}
+      .meal-picker{position:relative}.meal-picker input{font-size:16px;padding-right:40px!important}.meal-picker-toggle{position:absolute;right:2px;top:2px;width:40px;height:40px;padding:8px}.meal-picker-toggle svg{width:24px;height:24px;fill:currentColor}.meal-options{border:1px solid var(--divider-color,#ccc);border-radius:8px;margin-top:4px;max-height:336px;overflow-y:auto;overscroll-behavior:contain}.meal-options[hidden]{display:none}.meal-option{display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:2px;text-align:left;width:100%;height:56px;padding:7px 12px;border-radius:0;border-bottom:1px solid var(--divider-color,#ddd)}.meal-option:last-child{border-bottom:0}.meal-option strong,.meal-option small{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.meal-option strong{font-size:14px;font-weight:500}.meal-option small{font-size:11px;color:var(--secondary-text-color,#727272)}.meal-option.active,.meal-option[aria-selected=true]{background:color-mix(in srgb,var(--primary-color,#03a9f4) 12%,transparent)}.meal-empty{padding:12px;font-size:13px;color:var(--secondary-text-color,#727272)}
       @media(max-width:520px){main{padding:6px 12px 12px}.day{grid-template-columns:44px minmax(0,1fr) auto;gap:8px;min-height:68px}.icon-button{width:34px;height:38px}.row-actions{flex-direction:row;align-items:center}.dialog{padding:16px}.tabs button{padding:15px 12px}}
     </style><ha-card><div class="card-top"><nav aria-label="Essensplaner"><button data-action="view" data-view="week" class="${this._view === 'week' ? 'selected' : ''}">Essensplan</button><button data-action="view" data-view="random" class="${this._view === 'random' ? 'selected' : ''}">Zufallsrezept</button></nav>${this.isManager() ? `<button class="settings-button ${this._view === 'settings' ? 'selected' : ''}" data-action="view" data-view="settings" aria-label="Einstellungen" title="Einstellungen" aria-current="${this._view === 'settings' ? 'page' : 'false'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.2 7.2 0 0 0-1.63-.94l-.36-2.54A.49.49 0 0 0 13.88 2h-3.76a.49.49 0 0 0-.49.42L9.27 4.96c-.59.23-1.13.55-1.63.94l-2.39-.96a.5.5 0 0 0-.61.22L2.72 8.48a.5.5 0 0 0 .12.64l2.03 1.58a6.8 6.8 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .61.22l2.39-.96c.5.39 1.04.71 1.63.94l.36 2.54a.49.49 0 0 0 .49.42h3.76a.49.49 0 0 0 .49-.42l.36-2.54c.59.23 1.13.55 1.63.94l2.39.96a.5.5 0 0 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg></button>` : ''}</div><main>
       ${this._view === 'week' ? `<div class="week"><button class="week-nav" data-action="shift" data-shift="-1" aria-label="Vorherige Woche" title="Vorherige Woche">${this.icon('previous')}</button><strong>${this.weekLabel(weekStart, weekEnd)}</strong><button data-action="today">Heute</button><button class="week-nav" data-action="shift" data-shift="1" aria-label="Nächste Woche" title="Nächste Woche">${this.icon('next')}</button></div><div class="days">${dayRows || `<div class="empty-state">${state ? 'Für diese Woche sind keine Einträge verfügbar.' : 'Der Wochenplan-Sensor ist nicht geladen. Bitte Integration und Home-Assistant-Protokoll prüfen.'}</div>`}</div>` : this._view === 'random' ? randomMarkup : `<div class="page-actions"><h2>Gerichte</h2><button class="primary" data-action="new-meal">+ Gericht hinzufügen</button></div><p class="hint">Hier pflegst du eure gespeicherten Gerichte und die Personen, die sie gern essen.</p><div class="meal-list">${mealRows || '<div class="empty-state">Noch keine Gerichte gespeichert. Füge ein Gericht hinzu.</div>'}</div><div class="export-actions"><button data-action="export-meals">${this.icon('download')}<span>Gerichte exportieren</span></button></div><footer class="version">Version ${this.esc(ESSENSPLANER_VERSION)}</footer>`}
@@ -147,8 +149,7 @@ class EssensplanerCard extends HTMLElement {
     if (freeText) freeText.oninput = () => { this._modal.freeText = freeText.value; };
     const linkField = this.shadowRoot.querySelector('[data-field="link"]');
     if (linkField) linkField.oninput = () => { this._modal.link = linkField.value; };
-    const mealSelect = this.shadowRoot.querySelector('[data-field="meal-select"]');
-    if (mealSelect) mealSelect.onchange = () => { this._modal.mealId = mealSelect.value || null; };
+    this.bindMealPicker();
     this.bindSwipe();
   }
 
@@ -164,8 +165,84 @@ class EssensplanerCard extends HTMLElement {
     const entry = modal.entry || {};
     const edit = Boolean(entry.title);
     const free = modal.kind !== 'saved';
-    const selectedMeal = meals.find((m) => m.id === (modal.mealId || entry.meal_id)) || null;
-    return `<div class="overlay"><section class="dialog" role="dialog" aria-modal="true"><div class="dialog-head"><h2>${edit ? 'Eintrag bearbeiten' : 'Essen einplanen'}</h2><button class="close" data-action="close-modal" aria-label="Schließen">×</button></div><div class="form-grid"><div class="field"><span>Für ${this.esc(new Date(date + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' }))}</span><div class="choice-row"><label class="choice"><input type="radio" name="plan-kind" value="free" data-action="plan-kind" ${free ? 'checked' : ''}> Frei eintragen</label><label class="choice"><input type="radio" name="plan-kind" value="saved" data-action="plan-kind" ${free ? '' : 'checked'}> Aus Gerichten wählen</label></div></div>${free ? `<label class="field"><span>Mahlzeit</span><input type="text" data-field="text" value="${this.esc(modal.freeText ?? (entry.title || ''))}" maxlength="240" placeholder="Essen eintragen" autocomplete="off"></label><label class="field"><span>Link (optional)</span><input type="url" data-field="link" value="${this.esc(modal.link ?? (entry.link || ''))}" placeholder="https://…" inputmode="url"></label><label class="person-choice"><input type="checkbox" data-field="save-to-catalog" ${modal.saveToCatalog ? 'checked' : ''}> Auch in Gerichte speichern</label><div class="catalog-extra" ${modal.saveToCatalog ? '' : 'hidden'}><div class="field"><span>Art des Gerichts</span><div class="choice-row"><label class="choice"><input type="radio" name="new-meal-type" value="veg" ${(modal.newMeat ?? false) ? '' : 'checked'}> Vegetarisch</label><label class="choice"><input type="radio" name="new-meal-type" value="meat" ${(modal.newMeat ?? false) ? 'checked' : ''}> Mit Fleisch</label></div></div><div class="field"><span class="group-label">Wer isst es gern?</span><div class="check-grid">${['Vera', 'Manuel', 'Maximilian', 'Paul'].map((person) => `<label class="person-choice"><input type="checkbox" data-new-eater="${person}" ${(modal.newEaters || ['Vera', 'Manuel', 'Paul']).includes(person) ? 'checked' : ''}> ${person}</label>`).join('')}</div></div></div>` : `<label class="field saved-meal-picker"><span>Gericht auswählen</span><select data-field="meal-select"><option value="">Bitte Gericht auswählen …</option>${meals.map((m) => `<option value="${this.esc(m.id)}" ${m.id === selectedMeal?.id ? 'selected' : ''}>${this.esc(m.name)} · ${m.meat ? 'Fleisch' : 'vegetarisch'} · ${this.esc((m.eaters || []).join(', '))}</option>`).join('')}</select>${meals.length ? '' : '<small class="hint">Noch keine Gerichte gespeichert.</small>'}</label><label class="field"><span>Link (optional)</span><input type="url" data-field="link" value="${this.esc(modal.link ?? (entry.link || ''))}" placeholder="https://…" inputmode="url"></label>`}</div><div class="dialog-actions"><button data-action="close-modal">Abbrechen</button><button class="primary" data-action="save-day">Einplanen</button></div></section></div>`;
+    return `<div class="overlay"><section class="dialog" role="dialog" aria-modal="true"><div class="dialog-head"><h2>${edit ? 'Eintrag bearbeiten' : 'Essen einplanen'}</h2><button class="close" data-action="close-modal" aria-label="Schließen">×</button></div><div class="form-grid"><div class="field"><span>Für ${this.esc(new Date(date + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' }))}</span><div class="choice-row"><label class="choice"><input type="radio" name="plan-kind" value="free" data-action="plan-kind" ${free ? 'checked' : ''}> Frei eintragen</label><label class="choice"><input type="radio" name="plan-kind" value="saved" data-action="plan-kind" ${free ? '' : 'checked'}> Aus Gerichten auswählen</label></div></div>${free ? `<label class="field"><span>Mahlzeit</span><input type="text" data-field="text" value="${this.esc(modal.freeText ?? (entry.title || ''))}" maxlength="240" placeholder="Essen eintragen" autocomplete="off"></label><label class="field"><span>Link (optional)</span><input type="url" data-field="link" value="${this.esc(modal.link ?? (entry.link || ''))}" placeholder="https://…" inputmode="url"></label><label class="person-choice"><input type="checkbox" data-field="save-to-catalog" ${modal.saveToCatalog ? 'checked' : ''}> Auch in Gerichte speichern</label><div class="catalog-extra" ${modal.saveToCatalog ? '' : 'hidden'}><div class="field"><span>Art des Gerichts</span><div class="choice-row"><label class="choice"><input type="radio" name="new-meal-type" value="veg" ${(modal.newMeat ?? false) ? '' : 'checked'}> Vegetarisch</label><label class="choice"><input type="radio" name="new-meal-type" value="meat" ${(modal.newMeat ?? false) ? 'checked' : ''}> Mit Fleisch</label></div></div><div class="field"><span class="group-label">Wer isst es gern?</span><div class="check-grid">${['Vera', 'Manuel', 'Maximilian', 'Paul'].map((person) => `<label class="person-choice"><input type="checkbox" data-new-eater="${person}" ${(modal.newEaters || ['Vera', 'Manuel', 'Paul']).includes(person) ? 'checked' : ''}> ${person}</label>`).join('')}</div></div></div>` : `${this.renderMealPicker()}<label class="field"><span>Link (optional)</span><input type="url" data-field="link" value="${this.esc(modal.link ?? (entry.link || ''))}" placeholder="https://…" inputmode="url"></label>`}</div><div class="dialog-actions"><button data-action="close-modal">Abbrechen</button><button class="primary" data-action="save-day">Einplanen</button></div></section></div>`;
+  }
+
+  matchingMeals() {
+    const query = (this._modal?.mealName || '').trim().toLocaleLowerCase('de-DE');
+    return (this.getState()?.attributes?.meals || []).filter((meal) => meal.name.toLocaleLowerCase('de-DE').includes(query));
+  }
+  renderMealPicker() {
+    return `<div class="field saved-meal-picker"><label for="meal-search">Gericht auswählen</label><div class="meal-picker"><input id="meal-search" type="text" data-field="meal-search" role="combobox" aria-autocomplete="list" aria-controls="meal-options" aria-expanded="false" autocomplete="off" placeholder="Gericht suchen, z. B. Reis …" value="${this.esc(this._modal.mealName || '')}"><button type="button" class="meal-picker-toggle" aria-label="Gerichte aufklappen">${this.icon('expand')}</button><div id="meal-options" class="meal-options" role="listbox" aria-label="Passende Gerichte" hidden></div></div></div>`;
+  }
+  bindMealPicker() {
+    const input = this.shadowRoot.querySelector('[data-field="meal-search"]');
+    if (!input) return;
+    const picker = this.shadowRoot.querySelector('.meal-picker');
+    const toggle = picker.querySelector('.meal-picker-toggle');
+    const open = () => { this._modal.mealDropdownOpen = true; this._mealActiveIndex = -1; this.updateMealOptions(); };
+    input.onfocus = open;
+    input.onclick = () => { if (!this._modal.mealDropdownOpen) open(); };
+    input.oninput = () => {
+      this._modal.mealName = input.value;
+      this._modal.mealId = null;
+      open();
+    };
+    toggle.onclick = () => {
+      const wasOpen = this._modal.mealDropdownOpen;
+      input.focus();
+      this._modal.mealDropdownOpen = !wasOpen;
+      this._mealActiveIndex = -1;
+      this.updateMealOptions();
+    };
+    picker.onfocusout = (event) => {
+      if (event.relatedTarget && !picker.contains(event.relatedTarget)) { this._modal.mealDropdownOpen = false; this.updateMealOptions(); }
+    };
+    this.shadowRoot.querySelector('.overlay').onpointerdown = (event) => {
+      if (!picker.contains(event.target)) { this._modal.mealDropdownOpen = false; this.updateMealOptions(); }
+    };
+    input.onkeydown = (event) => {
+      const matches = this.matchingMeals();
+      if (event.key === 'Tab') { this._modal.mealDropdownOpen = false; this.updateMealOptions(); }
+      else if (event.key === 'Escape') { event.preventDefault(); this._modal.mealDropdownOpen = false; this.updateMealOptions(); }
+      else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault(); this._modal.mealDropdownOpen = true;
+        this._mealActiveIndex = matches.length ? (event.key === 'ArrowDown' ? Math.min((this._mealActiveIndex ?? -1) + 1, matches.length - 1) : Math.max((this._mealActiveIndex ?? 0) - 1, 0)) : -1;
+        this.updateMealOptions();
+        picker.querySelector('.meal-option.active')?.scrollIntoView({ block: 'nearest' });
+      } else if (event.key === 'Enter' && this._modal.mealDropdownOpen) {
+        event.preventDefault();
+        const meal = matches[this._mealActiveIndex] || (matches.length === 1 ? matches[0] : null);
+        if (meal) this.selectMeal(meal);
+      }
+    };
+    this.updateMealOptions();
+  }
+  updateMealOptions() {
+    const input = this.shadowRoot.querySelector('[data-field="meal-search"]');
+    const list = this.shadowRoot.querySelector('#meal-options');
+    if (!input || !list || !this._modal) return;
+    const open = Boolean(this._modal.mealDropdownOpen);
+    input.setAttribute('aria-expanded', String(open));
+    input.removeAttribute('aria-activedescendant');
+    list.hidden = !open;
+    if (!open) return;
+    const matches = this.matchingMeals();
+    list.innerHTML = matches.length ? matches.map((meal, index) => `<button type="button" class="meal-option ${index === this._mealActiveIndex ? 'active' : ''}" id="meal-option-${index}" role="option" aria-selected="${meal.id === this._modal.mealId}" tabindex="-1"><strong>${this.esc(meal.name)}</strong><small>${meal.meat ? 'Fleisch' : 'Vegetarisch'} · ${this.esc((meal.eaters || []).join(', '))}</small></button>`).join('') : '<div class="meal-empty" role="status">Keine passenden Gerichte gefunden.</div>';
+    list.querySelectorAll('.meal-option').forEach((button, index) => {
+      button.onpointerdown = (event) => { if (event.pointerType === 'mouse') event.preventDefault(); };
+      button.onclick = (event) => { event.stopPropagation(); this.selectMeal(matches[index]); };
+    });
+    if (matches[this._mealActiveIndex]) input.setAttribute('aria-activedescendant', `meal-option-${this._mealActiveIndex}`);
+  }
+  selectMeal(meal) {
+    const input = this.shadowRoot.querySelector('[data-field="meal-search"]');
+    this._modal.mealId = meal.id;
+    this._modal.mealName = meal.name;
+    input.value = meal.name;
+    input.focus();
+    this._modal.mealDropdownOpen = false;
+    this.updateMealOptions();
   }
 
   bindSwipe() {
@@ -197,9 +274,9 @@ class EssensplanerCard extends HTMLElement {
     const entry = this.entryFor(date) || {};
     const savedMeal = (state.meals || []).find((meal) => meal.id === entry.meal_id);
     const pending = this._pendingMeal;
-    this._modal = { type: 'day', date, entry, kind: pending || entry.meal_id ? 'saved' : 'free', mealId: pending?.id || entry.meal_id || null, mealName: pending?.name || savedMeal?.name || '', mealDropdownOpen: false, freeText: entry.meal_id || pending ? '' : (entry.title || ''), link: entry.link || '', saveToCatalog: false };
+    this._modal = { type: 'day', date, entry, kind: pending || entry.meal_id || !entry.title ? 'saved' : 'free', mealId: pending?.id || entry.meal_id || null, mealName: pending?.name || savedMeal?.name || '', mealDropdownOpen: false, freeText: entry.meal_id || pending ? '' : (entry.title || ''), link: entry.link || '', saveToCatalog: false };
     this.render();
-    this.shadowRoot.querySelector('[data-field="text"]')?.focus();
+    if (this._modal.kind === 'free') this.shadowRoot.querySelector('[data-field="text"]')?.focus();
   }
   async action(action, data) {
     if (action === 'view') { if (data.view === 'settings' && !this.isManager()) return; this._view = data.view; this._modal = null; this._notice = ''; this.render(); return; }
@@ -236,8 +313,6 @@ class EssensplanerCard extends HTMLElement {
     if (action === 'plan-kind') {
       if (!this._modal || !['free', 'saved'].includes(data.value)) return;
       this._modal.freeText = this.shadowRoot.querySelector('[data-field="text"]')?.value ?? this._modal.freeText ?? '';
-      const mealSelect = this.shadowRoot.querySelector('[data-field="meal-select"]');
-      if (mealSelect) this._modal.mealId = mealSelect.value || null;
       this._modal.link = this.shadowRoot.querySelector('[data-field="link"]')?.value ?? this._modal.link ?? '';
       this._modal.mealId = this._modal.mealId || null;
       this._modal.saveToCatalog = this.shadowRoot.querySelector('[data-field="save-to-catalog"]')?.checked ?? this._modal.saveToCatalog ?? false;
@@ -294,8 +369,7 @@ class EssensplanerCard extends HTMLElement {
     const kind = this.shadowRoot.querySelector('[name="plan-kind"]:checked')?.value || modal.kind;
     const payload = { date: modal.date };
     if (kind === 'saved') {
-      const mealSelect = this.shadowRoot.querySelector('[data-field="meal-select"]');
-      const mealId = mealSelect ? mealSelect.value : modal.mealId;
+      const mealId = modal.mealId;
       const meal = (state.meals || []).find((m) => m.id === mealId);
       if (!meal) { this.notify('Bitte ein gespeichertes Gericht aus der Liste auswählen.', true); return; }
       payload.meal_id = meal.id;
@@ -330,3 +404,4 @@ window.customCards = window.customCards || [];
 if (!window.customCards.some((card) => card.type === 'essensplaner-card')) {
   window.customCards.push({ type: 'essensplaner-card', name: 'Essensplaner', description: 'Wochenplan und Zufallsrezept' });
 }
+
