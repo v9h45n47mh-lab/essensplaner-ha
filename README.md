@@ -6,7 +6,7 @@ Eine lokale Essensplaner-Integration mit Wochenkalender Montag bis Sonntag, Frei
 
 1. Repository `v9h45n47mh-lab/essensplaner-ha` in HACS unter **Benutzerdefinierte Repositories** als **Integration** hinzufügen.
 2. **Essensplaner** installieren und Home Assistant neu starten.
-3. Unter **Einstellungen → Geräte & Dienste → Integration hinzufügen** nach **Essensplaner** suchen. Die Integration fügt die Essensplaner-Ansicht in die Seitenleiste ein.
+3. Unter **Einstellungen → Geräte & Dienste → Integration hinzufügen** nach **Essensplaner** suchen. Nach dem Neustart wird die Essensplaner-Karte in Lovelace registriert. Füge sie über **Dashboard bearbeiten → Karte hinzufügen → Essensplaner** zu deinem Dashboard hinzu.
 4. In den Integrationsoptionen können die HA-Kontonamen eingetragen werden, die bestehende Plan-Einträge und Gerichte bearbeiten oder löschen dürfen. Standard: `Vera, Manuel`. HA-Administratoren dürfen alles.
 
 ## Gerichte von der Site importieren
@@ -15,6 +15,16 @@ Eine lokale Essensplaner-Integration mit Wochenkalender Montag bis Sonntag, Frei
 2. In der HA-Seitenleiste **Essensplaner → Einstellungen → Gerichte aus der Site übernehmen** auswählen.
 
 Die Datei enthält nur den aktuellen Gerichtskatalog, Fleisch-Kennzeichen und Mitesser. Sie enthält keine Wochenplan-Einträge. Der Wochenplan und sein Verlauf bleiben lokal in Home Assistant.
+
+## Essensplaner zum Dashboard hinzufügen
+
+In einem normalen Lovelace-Dashboard: **Dashboard bearbeiten → Karte hinzufügen → Essensplaner**. Die Karte kann auch als YAML-Karte mit folgender Konfiguration eingefügt werden:
+
+```yaml
+type: custom:essensplaner-card
+```
+
+Wenn Lovelace-Ressourcen in `configuration.yaml` im YAML-Modus verwaltet werden, muss zusätzlich `/essensplaner-card.js?v=1.0.10` als JavaScript-Modul eingetragen werden.
 
 ## Ansicht und Rechte
 
