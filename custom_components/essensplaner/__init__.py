@@ -19,6 +19,8 @@ from .const import DOMAIN, PEOPLE, STORAGE_KEY, STORAGE_VERSION
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS = ["sensor"]
 IMPORT_SCHEMA = vol.Schema({vol.Required("catalog"): dict})
+MEAL_SCHEMA = vol.Schema({vol.Optional("id"): str, vol.Required("name"): vol.All(str, vol.Length(min=1,max=120)), vol.Required("meat"): bool, vol.Required("eaters"): [str]})
+DELETE_MEAL_SCHEMA = vol.Schema({vol.Required("id"): str})
 PLAN_SCHEMA = vol.Schema({vol.Required("date"): cv.date, vol.Optional("meal_id"): str, vol.Optional("text"): vol.All(str, vol.Length(min=1,max=240)), vol.Optional("link"): vol.All(str, vol.Length(max=2048)), vol.Optional("clear", default=False): bool})
 WEEK_SCHEMA = vol.Schema({vol.Optional("date"): cv.date})
 
@@ -46,6 +48,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             meals.append({"id":m["id"],"name":m["name"],"meat":m["meat"],"eaters":m["eaters"]})
         if not await can_manage(call): raise HomeAssistantError("Nur Vera, Manuel oder ein HA-Administrator dürfen Gerichte importieren.")
         data["meals"]=meals
+        await update()
+    async def save_meal(call: ServiceCall):
+        if not await can_manage(call): raise HomeAssistantError("Nur Vera, Manuel oder HA-Administratoren dürfen Gerichte verwalten.")
+        item=call.data
+        name=" ".join(item["name"].split()); eaters=item["eaters"]
+        if not eaters or any(p not in PEOPLE for p in eaters): raise HomeAssistantError("Bitte mindestens eine gültige Person auswählen.")
+        if item["meat"] and "Maximilian" in eaters: raise HomeAssistantError("Maximilian isst vegetarisch.")
+        meal={"id":item.get("id") or __import__("uuid").uuid4().hex,"name":name,"meat":item["meat"],"eaters":[p for p in PEOPLE if p in eaters]}
+        meals=data["meals"]
+        existing=next((i for i,m in enumerate(meals) if m["id"]==meal["id"]),None)
+        if existing is None: meals.append(meal)
+        else: meals[existing]=meal
+        await update()
+    async def delete_meal(call: ServiceCall):
+        if not await can_manage(call): raise HomeAssistantError("Nur Vera, Manuel oder HA-Administratoren dürfen Gerichte löschen.")
+        meal=next((m for m in data["meals"] if m["id"]==call.data["id"]),None)
+        if not meal: raise HomeAssistantError("Gericht nicht gefunden.")
+        data["meals"]=[m for m in data["meals"] if m["id"]!=meal["id"]]
+        for item in data["days"].values():
+            if item.get("meal_id")==meal["id"]: item["meal_id"]=None
         await update()
     async def show_week(call: ServiceCall):
         hass.data[DOMAIN][entry.entry_id]["week"] = call.data.get("date", date.today())
@@ -77,6 +99,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from homeassistant.helpers.dispatcher import async_dispatcher_send
     hass.services.async_register(DOMAIN,"import_catalog",import_catalog, schema=IMPORT_SCHEMA)
     hass.services.async_register(DOMAIN,"show_week",show_week, schema=WEEK_SCHEMA)
+    hass.services.async_register(DOMAIN,"save_meal",save_meal, schema=MEAL_SCHEMA)
+    hass.services.async_register(DOMAIN,"delete_meal",delete_meal, schema=DELETE_MEAL_SCHEMA)
     hass.services.async_register(DOMAIN,"plan_day",plan_day, schema=PLAN_SCHEMA)
     panel_file = Path(__file__).parent / "www" / "essensplaner-card.js"
     try:
