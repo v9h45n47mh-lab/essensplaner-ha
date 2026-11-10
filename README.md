@@ -17,13 +17,17 @@ In einem normalen Lovelace-Dashboard: **Dashboard bearbeiten → Karte hinzufüg
 type: custom:essensplaner-card
 ```
 
-Wenn Lovelace-Ressourcen in `configuration.yaml` im YAML-Modus verwaltet werden, muss zusätzlich `/essensplaner-card.js?v=1.1.1` als JavaScript-Modul eingetragen werden.
+Wenn Lovelace-Ressourcen in `configuration.yaml` im YAML-Modus verwaltet werden, muss zusätzlich `/essensplaner-card.js?v=1.1.2` als JavaScript-Modul eingetragen werden.
 
 ## Access Control
 
 Den Wochenplan-Sensor (standardmäßig `sensor.essensplaner_wochenplan`) für die Benutzer zum **Lesen und Bedienen** freigeben, direkt oder über sein Label. Seit Version 1.1.1 nennen alle Aktionen der Karte diesen Sensor als Ziel. Eine Freigabe der Service-Domain `essensplaner` ist damit für die Karte nicht erforderlich. Die Integration prüft, dass das Ziel tatsächlich ihr eigener Wochenplan-Sensor ist. Bestehende Einträge und Gerichte dürfen weiterhin nur die konfigurierten Verwalter oder HA-Administratoren ändern.
 
 Nach einem Update Home Assistant neu starten und die App beziehungsweise das Dashboard neu laden. Die automatisch registrierte Karten-Ressource erhält eine neue Versionsadresse.
+
+## Änderungen in 1.1.2
+
+Die Sensor-Aktualisierung läuft als Home-Assistant-Callback im Event Loop. Ein geplantes Gericht, Änderungen am Katalog und der Wochenwechsel werden so direkt an die Karte gemeldet. Sensor-Attribute werden als eigenständige Kopien geschrieben, damit auch Katalogänderungen zuverlässig ein neues Zustandsereignis auslösen. Nach der Gerichtsauswahl bestätigt **Einplanen** den Eintrag im gewählten Tag.
 
 ## Ansicht und Rechte
 

@@ -149,7 +149,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if lovelace and lovelace.resource_mode == MODE_STORAGE:
         resources = lovelace.resources
         await resources.async_get_info()
-        resource_url = "/essensplaner-card.js?v=1.1.1"
+        resource_url = "/essensplaner-card.js?v=1.1.2"
         found_resource = False
         for resource in resources.async_items():
             current_url = resource.get("url", "")
