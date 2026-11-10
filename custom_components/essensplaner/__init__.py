@@ -120,20 +120,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.services.async_register(DOMAIN,"plan_day",plan_day, schema=PLAN_SCHEMA)
     panel_file = Path(__file__).parent / "www" / "essensplaner-card.js"
     try:
-        await hass.http.async_register_static_paths([StaticPathConfig("/essensplaner-card.js?v=1.0.6", str(panel_file), cache_headers=True)])
+        await hass.http.async_register_static_paths([StaticPathConfig("/essensplaner-card.js", str(panel_file), cache_headers=True)])
     except RuntimeError:
+        # The static path is already registered during an in-place config-entry reload.
         pass
-    if not hass.data[DOMAIN].get("panel_registered"):
-        frontend.async_register_built_in_panel(
-            hass,
-            "custom",
-            frontend_url_path=DOMAIN,
-            sidebar_title="Essensplaner",
-            sidebar_icon="mdi:silverware-fork-knife",
-            config={"_panel_custom": {"name": "essensplaner-panel", "module_url": "/essensplaner-card.js"}},
-            require_admin=False,
-        )
-        hass.data[DOMAIN]["panel_registered"] = True
+    frontend.async_register_built_in_panel(
+        hass,
+        "custom",
+        frontend_url_path=DOMAIN,
+        sidebar_title="Essensplaner",
+        sidebar_icon="mdi:silverware-fork-knife",
+        config={"_panel_custom": {"name": "essensplaner-panel", "module_url": "/essensplaner-card.js?v=1.0.7"}},
+        require_admin=False,
+        update=frontend.async_panel_exists(hass, DOMAIN),
+    )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
