@@ -1,6 +1,6 @@
 # Essensplaner für Home Assistant
 
-Eine lokale Essensplaner-Integration mit Wochenkalender Montag bis Sonntag, Freitext, gespeicherten Gerichten, Links, Protokoll, Mitesser-Auswahl und passenden Vorschlägen. Rezeptvorschläge entfallen.
+Eine lokale Essensplaner-Integration mit Wochenkalender Montag bis Sonntag, Freitext, gespeicherten Gerichten, Links, Protokoll, Mitesser-Auswahl und Zufallsrezepten.
 
 ## Installation
 
@@ -23,6 +23,6 @@ Die Datei enthält nur den aktuellen Gerichtskatalog, Fleisch-Kennzeichen und Mi
 - Gerichte werden direkt in der App hinzugefügt und bearbeitet. Das Formular zeigt Fleisch/vegetarisch und die Personen, die das Gericht gern essen.
 - Wochenplanung, Bearbeiten und Löschen erfolgen in App-Dialogen ohne Browser-Pop-ups. Bei freien Mahlzeiten lassen sich Link und optional der Eintrag im Gerichtskatalog hinterlegen.
 
-## Lokale Installation ohne HACS
+- „Zufallsrezept“ schlägt passende gespeicherte Gerichte für die gewählten Mitesser vor, ohne sie direkt zu wiederholen. Mit Maximilian werden nur vegetarische Gerichte vorgeschlagen. Das ausgewählte Gericht lässt sich direkt für einen Kalendertag vormerken.\n\n## Lokale Installation ohne HACS
 
 `custom_components/essensplaner` in den gleichnamigen Ordner unter `<HA-Konfiguration>/custom_components/` kopieren und Home Assistant neu starten.
