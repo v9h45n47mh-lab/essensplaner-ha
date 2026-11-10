@@ -41,3 +41,41 @@ show_week:
       name: Datum
       selector:
         date: {}
+save_meal:
+  name: Gericht speichern
+  description: Fügt ein Gericht hinzu oder aktualisiert es.
+  fields:
+    id:
+      name: Gericht-ID
+      selector:
+        text: {}
+    name:
+      name: Gericht
+      required: true
+      selector:
+        text: {}
+    meat:
+      name: Mit Fleisch
+      required: true
+      selector:
+        boolean: {}
+    eaters:
+      name: Wer isst das Gericht?
+      required: true
+      selector:
+        select:
+          multiple: true
+          options:
+            - Vera
+            - Manuel
+            - Maximilian
+            - Paul
+delete_meal:
+  name: Gericht löschen
+  description: Entfernt ein gespeichertes Gericht.
+  fields:
+    id:
+      name: Gericht-ID
+      required: true
+      selector:
+        text: {}
