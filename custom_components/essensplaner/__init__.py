@@ -120,7 +120,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.services.async_register(DOMAIN,"plan_day",plan_day, schema=PLAN_SCHEMA)
     panel_file = Path(__file__).parent / "www" / "essensplaner-card.js"
     try:
-        await hass.http.async_register_static_paths([StaticPathConfig("/essensplaner-card.js?v=1.0.3", str(panel_file), cache_headers=True)])
+        await hass.http.async_register_static_paths([StaticPathConfig("/essensplaner-card.js?v=1.0.4", str(panel_file), cache_headers=True)])
     except RuntimeError:
         pass
     if not hass.data[DOMAIN].get("panel_registered"):
