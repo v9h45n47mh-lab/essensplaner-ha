@@ -17,13 +17,20 @@ In einem normalen Lovelace-Dashboard: **Dashboard bearbeiten → Karte hinzufüg
 type: custom:essensplaner-card
 ```
 
-Wenn Lovelace-Ressourcen in `configuration.yaml` im YAML-Modus verwaltet werden, muss zusätzlich `/essensplaner-card.js?v=1.1.3` als JavaScript-Modul eingetragen werden.
+Wenn Lovelace-Ressourcen in `configuration.yaml` im YAML-Modus verwaltet werden, muss zusätzlich `/essensplaner-card.js?v=1.2.0` als JavaScript-Modul eingetragen werden.
 
 ## Access Control
 
-Den Wochenplan-Sensor (standardmäßig `sensor.essensplaner_wochenplan`) für die Benutzer zum **Lesen und Bedienen** freigeben, direkt oder über sein Label. Seit Version 1.1.1 nennen alle Aktionen der Karte diesen Sensor als Ziel. Eine Freigabe der Service-Domain `essensplaner` ist damit für die Karte nicht erforderlich. Die Integration prüft, dass das Ziel tatsächlich ihr eigener Wochenplan-Sensor ist. Bestehende Einträge und Gerichte dürfen weiterhin nur die konfigurierten Verwalter oder HA-Administratoren ändern.
+Den Wochenplan-Sensor (standardmäßig `sensor.essensplaner_wochenplan`) für die Benutzer zum **Lesen und Bedienen** freigeben, direkt oder über sein Label. Seit Version 1.1.1 nennen alle Aktionen der Karte diesen Sensor als Ziel. Eine Freigabe der Service-Domain `essensplaner` ist damit für die Karte nicht erforderlich. Die Integration prüft, dass das Ziel tatsächlich ihr eigener Wochenplan-Sensor ist. Bestehende Einträge und Gerichte dürfen nur die konfigurierten Verwalter oder HA-Administratoren ändern. Eigene Kalendereinträge darf zusätzlich ihr Eintragender löschen.
 
 Nach einem Update Home Assistant neu starten und die App beziehungsweise das Dashboard neu laden. Die automatisch registrierte Karten-Ressource erhält eine neue Versionsadresse.
+
+## Änderungen in 1.2.0
+
+- Größere Wochenpfeile mit 48 × 48 Pixeln Bedienfläche.
+- Bearbeiten und Löschen in der Gerichteverwaltung als Symbole mit Beschriftung für Screenreader und Tooltip.
+- Versionsanzeige am Ende der Einstellungen.
+- Maximilian und Paul können eigene Kalendereinträge nach Bestätigung löschen. Das Backend prüft die gespeicherte Benutzer-ID. Bei älteren Einträgen ohne Benutzer-ID wird ein eindeutig zuordenbarer Kontoname verwendet. Die Berechtigung zum Ändern bestehender Einträge bleibt auf Verwalter und HA-Administratoren beschränkt.
 
 ## Änderungen in 1.1.3
 
@@ -36,7 +43,7 @@ Die Sensor-Aktualisierung läuft als Home-Assistant-Callback im Event Loop. Ein 
 ## Ansicht und Rechte
 
 - Wochenweise Ansicht Montag bis Sonntag mit vor/zurück, Tagesplanung, Link, Bearbeiten/Löschen.
-- Leere Tage können von jedem angemeldeten HA-Konto belegt werden. Bestehende Einträge und der Gerichtskatalog können nur die konfigurierten Verwalter oder HA-Administratoren ändern.
+- Leere Tage können von jedem angemeldeten HA-Konto belegt werden. Bestehende Einträge und der Gerichtskatalog können nur die konfigurierten Verwalter oder HA-Administratoren ändern. Eigene Kalendereinträge kann der Eintragende löschen.
 - Gerichte werden direkt in der App hinzugefügt und bearbeitet. Das Formular zeigt Fleisch/vegetarisch sowie die Personen, die das Gericht gern essen.
 - Wochenplanung, Bearbeiten und Löschen erfolgen in App-Dialogen ohne Browser-Pop-ups. Bei freien Mahlzeiten lassen sich Link und optional der Eintrag im Gerichtskatalog hinterlegen.
 

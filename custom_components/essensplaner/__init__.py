@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from asyncio import Lock
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse
@@ -40,10 +41,26 @@ async def async_validate_target(hass: HomeAssistant, entry: ConfigEntry, call: S
         if not user or not entity_id or not user.permissions.check_entity(entity_id, POLICY_CONTROL):
             raise HomeAssistantError("Keine Berechtigung zum Bedienen des Essensplaner-Wochenplans.")
 
+
+async def async_is_entry_owner(hass: HomeAssistant, item: dict, user_id: str | None) -> bool:
+    """Use stored user IDs; resolve legacy names only if they are unique."""
+    if not user_id:
+        return False
+    if "planned_by_user_id" in item:
+        return item["planned_by_user_id"] == user_id
+    user = await hass.auth.async_get_user(user_id)
+    name = str(item.get("planned_by") or "").strip().casefold()
+    if not user or not name or (user.name or "").strip().casefold() != name:
+        return False
+    users = await hass.auth.async_get_users()
+    return {account.id for account in users if (account.name or "").strip().casefold() == name} == {user_id}
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     store = Store(hass, STORAGE_VERSION, f"{STORAGE_KEY}_{entry.entry_id}")
     data = await store.async_load() or {"meals": [], "days": {}, "history": []}
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"store": store, "data": data, "week": date.today()}
+    plan_lock = Lock()
     entry.async_on_unload(entry.add_update_listener(_options_updated))
     async def update():
         await store.async_save(data)
@@ -51,7 +68,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async def can_manage(call):
         user = await hass.auth.async_get_user(call.context.user_id) if call.context.user_id else None
         configured = {x.strip().casefold() for x in entry.options.get("manager_names", "Vera, Manuel").split(",") if x.strip()}
-        return bool(user and (user.is_admin or user.name.casefold() in configured))
+        return bool(user and (user.is_admin or (user.name or "").casefold() in configured))
     async def import_catalog(call: ServiceCall):
         await async_validate_target(hass, entry, call)
         payload = call.data["catalog"]
@@ -110,14 +127,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await update()
     async def plan_day(call: ServiceCall):
         await async_validate_target(hass, entry, call)
+        async with plan_lock:
+            await apply_plan_day(call)
+    async def apply_plan_day(call: ServiceCall):
         target=call.data["date"].isoformat(); old=data["days"].get(target)
-        if old and not await can_manage(call): raise HomeAssistantError("Bestehende Einträge dürfen nur Vera, Manuel oder HA-Administratoren ändern.")
         if call.data.get("clear"):
-            if old and not await can_manage(call): raise HomeAssistantError("Nur Vera, Manuel oder HA-Administratoren dürfen löschen.")
+            if old and not await can_manage(call) and not await async_is_entry_owner(hass, old, call.context.user_id):
+                raise HomeAssistantError("Du darfst nur eigene Einträge löschen. Andere Einträge dürfen nur Vera, Manuel oder HA-Administratoren löschen.")
             if old: data["days"].pop(target)
             title=old.get("title","") if old else ""
             action="remove"
         else:
+            if old and not await can_manage(call): raise HomeAssistantError("Bestehende Einträge dürfen nur Vera, Manuel oder HA-Administratoren ändern.")
             meal_id=call.data.get("meal_id"); meal=next((m for m in data["meals"] if m["id"]==meal_id),None) if meal_id else None
             if meal_id and not meal: raise HomeAssistantError("Das gespeicherte Gericht wurde nicht gefunden.")
             title=meal["name"] if meal else " ".join(call.data.get("text","").split())
@@ -128,7 +149,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 if parsed.scheme not in ("http","https") or not parsed.netloc or parsed.username or parsed.password: raise HomeAssistantError("Der Link muss mit http:// oder https:// beginnen.")
             user=await hass.auth.async_get_user(call.context.user_id) if call.context.user_id else None
             by=user.name if user else "Home Assistant"
-            data["days"][target]={"title":title,"meal_id":meal["id"] if meal else None,"link":link,"planned_by":by,"planned_at":datetime.now().astimezone().isoformat()}
+            data["days"][target]={"title":title,"meal_id":meal["id"] if meal else None,"link":link,"planned_by":by,"planned_by_user_id":call.context.user_id,"planned_at":datetime.now().astimezone().isoformat()}
             action="replace" if old else "create"
         data.setdefault("history",[]).insert(0,{"date":target,"action":action,"before":old.get("title","") if old else "","after":title if action!="remove" else "","by":(await hass.auth.async_get_user(call.context.user_id)).name if call.context.user_id else "Home Assistant","at":datetime.now().astimezone().isoformat()})
         del data["history"][200:]
@@ -149,7 +170,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if lovelace and lovelace.resource_mode == MODE_STORAGE:
         resources = lovelace.resources
         await resources.async_get_info()
-        resource_url = "/essensplaner-card.js?v=1.1.3"
+        resource_url = "/essensplaner-card.js?v=1.2.0"
         found_resource = False
         for resource in resources.async_items():
             current_url = resource.get("url", "")
