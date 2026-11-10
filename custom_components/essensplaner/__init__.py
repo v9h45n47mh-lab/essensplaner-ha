@@ -38,14 +38,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return bool(user and (user.is_admin or user.name.casefold() in configured))
     async def import_catalog(call: ServiceCall):
         payload = call.data["catalog"]
-        if payload.get("format") != "essensplaner-ha-meals" or payload.get("version") != 1 or payload.get("people") != list(PEOPLE) or not isinstance(payload.get("meals"), list):
-            raise HomeAssistantError("Ungültiger Export. Bitte die JSON-Datei aus dem Essensplaner verwenden.")
+        if isinstance(payload.get("catalog"), dict):
+            payload = payload["catalog"]
+        if payload.get("format") not in (None, "essensplaner-ha-meals") or payload.get("version") not in (None, 1) or not isinstance(payload.get("meals"), list):
+            raise HomeAssistantError("Ungültiger Export. Erwartet wird eine JSON-Datei mit einer Liste 'meals'.")
         meals=[]
-        for m in payload["meals"]:
-            if not isinstance(m,dict) or not isinstance(m.get("id"),str) or not isinstance(m.get("name"),str) or not isinstance(m.get("meat"),bool) or not isinstance(m.get("eaters"),list) or not m["eaters"] or any(p not in PEOPLE for p in m["eaters"]):
-                raise HomeAssistantError("Ein Gericht im Export ist unvollständig oder ungültig.")
-            if m["meat"] and "Maximilian" in m["eaters"]: raise HomeAssistantError("Ein Fleischgericht darf Maximilian nicht zugeordnet sein.")
-            meals.append({"id":m["id"],"name":m["name"],"meat":m["meat"],"eaters":m["eaters"]})
+        for index, m in enumerate(payload["meals"], start=1):
+            if not isinstance(m,dict) or not isinstance(m.get("name"),str) or not isinstance(m.get("eaters"),list) or not m["eaters"] or any(p not in PEOPLE for p in m["eaters"]):
+                raise HomeAssistantError(f"Gericht {index} ist unvollständig. Benötigt werden name und eaters mit mindestens einer gültigen Person.")
+            raw_meat=m.get("meat", m.get("is_meat", False))
+            meat = raw_meat if isinstance(raw_meat, bool) else str(raw_meat).strip().casefold() in ("j", "ja", "yes", "true", "1", "fleisch")
+            if meat and "Maximilian" in m["eaters"]: raise HomeAssistantError(f"Gericht '{m['name']}' ist als Fleischgericht markiert und Maximilian zugeordnet.")
+            meals.append({"id":m.get("id") if isinstance(m.get("id"),str) and m.get("id") else __import__("uuid").uuid4().hex,"name":" ".join(m["name"].split()),"meat":meat,"eaters":[p for p in PEOPLE if p in m["eaters"]]})
         if not await can_manage(call): raise HomeAssistantError("Nur Vera, Manuel oder ein HA-Administrator dürfen Gerichte importieren.")
         data["meals"]=meals
         await update()
