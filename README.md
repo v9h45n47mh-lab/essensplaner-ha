@@ -17,13 +17,18 @@ In einem normalen Lovelace-Dashboard: **Dashboard bearbeiten → Karte hinzufüg
 type: custom:essensplaner-card
 ```
 
-Wenn Lovelace-Ressourcen in `configuration.yaml` im YAML-Modus verwaltet werden, muss zusätzlich `/essensplaner-card.js?v=1.2.0` als JavaScript-Modul eingetragen werden.
+Wenn Lovelace-Ressourcen in `configuration.yaml` im YAML-Modus verwaltet werden, muss zusätzlich `/essensplaner-card.js?v=1.2.1` als JavaScript-Modul eingetragen werden.
 
 ## Access Control
 
 Den Wochenplan-Sensor (standardmäßig `sensor.essensplaner_wochenplan`) für die Benutzer zum **Lesen und Bedienen** freigeben, direkt oder über sein Label. Seit Version 1.1.1 nennen alle Aktionen der Karte diesen Sensor als Ziel. Eine Freigabe der Service-Domain `essensplaner` ist damit für die Karte nicht erforderlich. Die Integration prüft, dass das Ziel tatsächlich ihr eigener Wochenplan-Sensor ist. Bestehende Einträge und Gerichte dürfen nur die konfigurierten Verwalter oder HA-Administratoren ändern. Eigene Kalendereinträge darf zusätzlich ihr Eintragender löschen.
 
 Nach einem Update Home Assistant neu starten und die App beziehungsweise das Dashboard neu laden. Die automatisch registrierte Karten-Ressource erhält eine neue Versionsadresse.
+
+## Änderungen in 1.2.1
+
+- Im Zufallsrezept sind anfangs Vera, Manuel, Maximilian und Paul ausgewählt. Eine anschließend geänderte Auswahl bleibt beim Wechsel der Ansichten erhalten.
+- Unter Einstellungen → Gerichte exportieren lässt sich der vollständige Gerichtskatalog als JSON-Datei herunterladen. Der Export enthält IDs, Namen, Fleisch/vegetarisch und die zugeordneten Personen im bisherigen Katalogformat `essensplaner-ha-meals` (Version 1).
 
 ## Änderungen in 1.2.0
 
