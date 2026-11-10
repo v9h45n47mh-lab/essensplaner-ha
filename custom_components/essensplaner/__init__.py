@@ -44,12 +44,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             raise HomeAssistantError("Ungültiger Export. Erwartet wird eine JSON-Datei mit einer Liste 'meals'.")
         meals=[]
         for index, m in enumerate(payload["meals"], start=1):
-            if not isinstance(m,dict) or not isinstance(m.get("name"),str) or not isinstance(m.get("eaters"),list) or not m["eaters"] or any(p not in PEOPLE for p in m["eaters"]):
-                raise HomeAssistantError(f"Gericht {index} ist unvollständig. Benötigt werden name und eaters mit mindestens einer gültigen Person.")
-            raw_meat=m.get("meat", m.get("is_meat", False))
+            if not isinstance(m, dict) or not isinstance(m.get("name", m.get("title")), str):
+                raise HomeAssistantError(f"Gericht {index} enthält keinen gültigen Namen.")
+            raw_eaters=m.get("eaters", m.get("people", m.get("likedBy", m.get("likes", []))))
+            if isinstance(raw_eaters, dict):
+                eaters=[p for p, liked in raw_eaters.items() if liked is True or str(liked).casefold() in ("x", "j", "ja", "true", "1")]
+            elif isinstance(raw_eaters, str):
+                eaters=[p.strip() for p in raw_eaters.replace(";", ",").split(",") if p.strip()]
+            elif isinstance(raw_eaters, list):
+                eaters=raw_eaters
+            else:
+                eaters=[]
+            if not eaters or any(p not in PEOPLE for p in eaters):
+                raise HomeAssistantError(f"Gericht {index} ({m.get('name', m.get('title'))}) benötigt mindestens eine gültige Person unter eaters.")
+            name=m.get("name", m.get("title"))
+            raw_meat=m.get("meat", m.get("is_meat", m.get("isMeat", m.get("fleisch", False))))
             meat = raw_meat if isinstance(raw_meat, bool) else str(raw_meat).strip().casefold() in ("j", "ja", "yes", "true", "1", "fleisch")
-            if meat and "Maximilian" in m["eaters"]: raise HomeAssistantError(f"Gericht '{m['name']}' ist als Fleischgericht markiert und Maximilian zugeordnet.")
-            meals.append({"id":m.get("id") if isinstance(m.get("id"),str) and m.get("id") else __import__("uuid").uuid4().hex,"name":" ".join(m["name"].split()),"meat":meat,"eaters":[p for p in PEOPLE if p in m["eaters"]]})
+            if meat and "Maximilian" in eaters: raise HomeAssistantError(f"Gericht '{name}' ist als Fleischgericht markiert und Maximilian zugeordnet.")
+            meals.append({"id":m.get("id") if isinstance(m.get("id"),str) and m.get("id") else __import__("uuid").uuid4().hex,"name":" ".join(name.split()),"meat":meat,"eaters":[p for p in PEOPLE if p in eaters]})
         if not await can_manage(call): raise HomeAssistantError("Nur Vera, Manuel oder ein HA-Administrator dürfen Gerichte importieren.")
         data["meals"]=meals
         await update()
