@@ -1,26 +1,189 @@
 class EssensplanerCard extends HTMLElement {
-  setConfig(config){this.config=config||{};this.attachShadow({mode:'open'});this._weekShift=0;this._view='week';this._people=[];this._unsub=null;this.render();}
-  set hass(hass){this._hass=hass;this.render();}
-  getCardSize(){return 5;}
-  getState(){const states=this._hass?.states||{};const valid=s=>s?.attributes?.week_start&&Array.isArray(s.attributes.days)&&Array.isArray(s.attributes.meals);const exact=states['sensor.essensplaner_wochenplan'];return valid(exact)?exact:Object.values(states).find(valid)||null;}
-  async call(service,data={}){await this._hass.callService('essensplaner',service,data);}
-  render(){if(!this.shadowRoot||!this._hass)return;const state=this.getState();const a=state?.attributes||{};const days=a.days||[],meals=a.meals||[];const daysHtml=days.map((d,i)=>{const e=d.entry;return `<article class="day" data-date="${d.date}"><div class="date"><b>${['Mo','Di','Mi','Do','Fr','Sa','So'][i]}</b><small>${new Date(d.date+'T12:00:00').toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'})}</small></div><div class="dish">${e?this.esc(e.title):'<span class="muted">Noch offen</span>'}${e?.link?`<a class="link" href="${this.esc(e.link)}" target="_blank" rel="noopener">Link ↗</a>`:''}<small class="meta">${e?`Eingetragen von ${this.esc(e.planned_by)} · ${this.time(e.planned_at)}`:''}</small></div><div class="actions"><button data-action="edit" data-date="${d.date}" aria-label="${e?'Bearbeiten':'Einplanen'}">${e?'✎':'+'}</button>${e?`<button data-action="delete" data-date="${d.date}" aria-label="Löschen">×</button>`:''}</div></article>`;}).join('');
- this.shadowRoot.innerHTML=`<style>:host{display:block;color:var(--primary-text-color);font:14px var(--paper-font-body1_-_font-family,Roboto,sans-serif)}*{box-sizing:border-box}.wrap{max-width:850px;margin:auto;padding:16px}.tabs,.week,.row,.actions{display:flex;gap:8px;align-items:center}.tabs{border-bottom:1px solid var(--divider-color);margin-bottom:14px}.tabs button{border:0;border-bottom:2px solid transparent;background:none;padding:12px;color:var(--secondary-text-color)}.tabs button.active{color:var(--primary-color);border-color:var(--primary-color)}button,input,select{font:inherit;color:inherit}button{cursor:pointer;background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:8px;padding:9px 12px}.week{justify-content:space-between;margin:12px 0}.days{display:grid;gap:8px}.day{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:12px;align-items:center;border:1px solid var(--divider-color);border-radius:12px;padding:12px;min-height:74px}.date{display:grid;text-align:center;gap:4px}.date small,.meta,.muted,.notice{color:var(--secondary-text-color);font-size:12px}.dish{min-width:0;font-weight:500}.meta{display:block;font-weight:400;margin-top:4px}.link{display:inline-block;margin-left:8px;color:var(--primary-color)}.actions button{min-width:38px}.box{border:1px solid var(--divider-color);border-radius:12px;padding:16px;margin:10px 0}.box h2{font-size:20px;margin:0 0 10px}.row{flex-wrap:wrap;margin:10px 0}.history{font-size:12px;max-height:240px;overflow:auto}ul.meals{padding-left:20px}ul.meals li{margin:10px 0}.notice{padding:14px}@media(max-width:480px){.wrap{padding:8px}.day{grid-template-columns:42px minmax(0,1fr) auto;gap:7px;padding:9px}.actions{gap:4px}.actions button{min-width:32px;padding:7px}.tabs button{flex:1}}</style><div class="wrap"><nav class="tabs"><button data-view="week" class="${this._view==='week'?'active':''}">Essensplan</button><button data-view="settings" class="${this._view==='settings'?'active':''}">⚙ Einstellungen</button></nav>${this._view==='week'?`<div class="week"><button data-action="shift" data-shift="-1">‹</button><b>${this.weekLabel(a.week_start,a.week_end)}</b><div><button data-action="today">Heute</button> <button data-action="shift" data-shift="1">›</button></div></div><div class="days">${daysHtml||`<p class="notice">${state?'Für diese Woche sind keine Tage verfügbar.':'Wochenplan-Sensor fehlt. Bitte Integration laden und Home-Assistant-Protokoll prüfen.'}</p>`}</div><details class="box"><summary>Änderungsverlauf</summary><ul class="history">${(a.history||[]).map(h=>`<li>${this.esc(h.by)} · ${this.esc(h.action)} · ${this.esc(h.date)}${h.after?': '+this.esc(h.after):''}</li>`).join('')||'<li>Noch keine Änderungen.</li>'}</ul></details>`:`<div class="box"><h2>Gerichte</h2><p class="muted">Gerichte verwalten oder aus der Essensplaner-Site importieren.</p><label class="row">Gerichte-JSON importieren <input data-import type="file" accept="application/json,.json"></label><div class="row"><button data-action="add-meal">Neues Gericht hinzufügen</button></div><ul class="meals">${meals.map(m=>`<li>${this.esc(m.name)} · ${m.meat?'Fleisch':'vegetarisch'} <button data-action="edit-meal" data-id="${this.esc(m.id)}">Bearbeiten</button> <button data-action="delete-meal" data-id="${this.esc(m.id)}">×</button></li>`).join('')||'<li>Noch keine Gerichte geladen.</li>'}</ul></div>`}</div>`;
- this.shadowRoot.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{this._view=b.dataset.view;this.render();});
- this.shadowRoot.querySelectorAll('[data-action]').forEach(b=>b.onclick=e=>{e.stopPropagation();this.action(b.dataset.action,b.dataset);});this.shadowRoot.querySelectorAll('.day').forEach(el=>el.onclick=()=>this.action('select-day',{date:el.dataset.date}));
- this.shadowRoot.querySelectorAll('[data-person]').forEach(b=>b.onchange=()=>{this._people=[...this.shadowRoot.querySelectorAll('[data-person]:checked')].map(x=>x.dataset.person);});
- const dates=this.shadowRoot.querySelector('.days');if(dates){let start=null;dates.addEventListener('touchstart',e=>{if(e.touches.length===1)start=[e.touches[0].clientX,e.touches[0].clientY];},{passive:true});dates.addEventListener('touchend',e=>{if(!start||!e.changedTouches.length)return;const dx=e.changedTouches[0].clientX-start[0],dy=e.changedTouches[0].clientY-start[1];start=null;const a=this.getState()?.attributes||{};if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)*1.2){const n=new Date((a.week_start||new Date().toISOString().slice(0,10))+'T12:00:00');n.setDate(n.getDate()+(dx<0?7:-7));this.call('show_week',{date:n.toISOString().slice(0,10)});}else if(dy>70&&Math.abs(dy)>Math.abs(dx)*1.2)this.call('show_week',{date:a.week_start});},{passive:true});}const file=this.shadowRoot.querySelector('[data-import]');if(file)file.onchange=async()=>{const f=file.files[0];if(!f)return;try{const catalog=JSON.parse(await f.text());await this.call('import_catalog',{catalog});alert('Gerichte übernommen.');}catch(e){alert('Import fehlgeschlagen: '+(e.message||e));}file.value='';};
- }
- async action(action,d){if(action==='add-meal'){return this.editMeal(null);}if(action==='edit-meal'){return this.editMeal(d.id);}if(action==='delete-meal'){if(confirm('Gericht löschen?'))await this.call('delete_meal',{id:d.id});return;}if(action==='plan-suggestion'){this._pendingMeal=this._suggestion;this._view='week';this.render();alert('Wähle einen Tag im Wochenplan.');return;}if(action==='select-day'){if(this._pendingMeal){await this.call('plan_day',{date:d.date,meal_id:this._pendingMeal.id});this._pendingMeal=null;return;}return this.action('edit',d);}if(action==='shift'){const n=new Date((this.getState()?.attributes.week_start||new Date().toISOString().slice(0,10))+'T12:00:00');n.setDate(n.getDate()+Number(d.shift)*7);await this.call('show_week',{date:n.toISOString().slice(0,10)});return;}if(action==='today'){await this.call('show_week',{date:new Date().toISOString().slice(0,10)});return;}if(action==='suggest'||action==='another'){if(!this._people.length){alert('Bitte auswählen, wer mitisst.');return;}const all=this.getState()?.attributes.meals||[],veg=this._people.includes('Maximilian');let options=all.filter(m=>this._people.every(p=>m.eaters.includes(p))&&(!veg||!m.meat));if(!options.length){alert('Kein passendes Gericht gefunden.');return;}options=options.map(m=>({...m,rank:m.eaters.filter(p=>!this._people.includes(p)).length}));const max=Math.max(...options.map(m=>m.rank));options=options.filter(m=>m.rank===max);if(!veg){const meat=options.filter(m=>m.meat);if(meat.length)options=meat;}this._suggestion=options[Math.floor(Math.random()*options.length)];this._suggestion.reason='Passt zu den Mitessern';this.render();return;}if(action==='edit'){const a=this.getState()?.attributes||{},entry=(a.days||[]).find(x=>x.date===d.date)?.entry;const meal=entry?.meal_id;const values=(a.meals||[]).map(m=>m.name);let name=entry?.title||'';if(!name&&values.length){const selected=prompt('Gericht aus der Liste eintragen (oder Freitext):',values[0]);if(selected===null)return;name=selected;}else{const selected=prompt('Essen für '+d.date+':',name);if(selected===null)return;name=selected;}let catalog=(a.meals||[]).find(m=>m.name===name);const link=prompt('Optionaler Link:',entry?.link||'');if(link===null)return;if(!catalog&&!entry&&confirm('Dieses Essen auch in Gerichte speichern?'))catalog=await this.editMeal(null,name);if(catalog===false)return;await this.call('plan_day',{date:d.date,...(catalog?{meal_id:catalog.id}:{text:name}),...(link?{link}:{})});return;}if(action==='delete'){if(!confirm('Diesen Tag löschen?'))return;await this.call('plan_day',{date:d.date,clear:true});}}
- async editMeal(id,initialName=''){const all=this.getState()?.attributes.meals||[],old=all.find(m=>m.id===id);const name=prompt('Gericht:',old?.name||initialName);if(name===null)return false;const meat=confirm('Mit Fleisch? OK = Fleisch, Abbrechen = vegetarisch');const people=prompt('Wer isst das Gericht? Namen durch Komma trennen:',(old?.eaters||['Vera','Manuel','Paul']).join(', '));if(people===null)return false;const eaters=people.split(',').map(x=>x.trim()).filter(Boolean);if(meat&&eaters.includes('Maximilian')){alert('Maximilian isst vegetarisch.');return false;}const idValue=old?.id||('meal-'+crypto.randomUUID());await this.call('save_meal',{id:idValue,name:name.trim(),meat,eaters});return{id:idValue,name:name.trim(),meat,eaters};}
- esc(x){return String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
- time(v){return v?new Date(v).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';}
- weekLabel(s,e){return s&&e?`${new Date(s+'T12:00:00').toLocaleDateString('de-DE',{day:'numeric',month:'short'})} – ${new Date(e+'T12:00:00').toLocaleDateString('de-DE',{day:'numeric',month:'short',year:'numeric'})}`:'Wird geladen …';}
+  setConfig(config) {
+    this.config = config || {};
+    this.attachShadow({ mode: 'open' });
+    this._view = 'week';
+    this._modal = null;
+    this._notice = '';
+    this._noticeError = false;
+    this._people = [];
+    this.render();
+  }
+
+  set hass(hass) { this._hass = hass; this.render(); }
+  getCardSize() { return 6; }
+  getState() {
+    const states = this._hass?.states || {};
+    const valid = (s) => s?.attributes?.week_start && Array.isArray(s.attributes.days) && Array.isArray(s.attributes.meals);
+    const exact = states['sensor.essensplaner_wochenplan'];
+    return valid(exact) ? exact : Object.values(states).find(valid) || null;
+  }
+  async call(service, data = {}) { return this._hass.callService('essensplaner', service, data); }
+  esc(value) { return String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+  time(value) { return value ? new Date(value).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''; }
+  weekLabel(start, end) {
+    return start && end ? `${new Date(start + 'T12:00:00').toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })} – ${new Date(end + 'T12:00:00').toLocaleDateString('de-DE', { day: 'numeric', month: 'short', year: 'numeric' })}` : 'Wird geladen …';
+  }
+  render() {
+    if (!this.shadowRoot || !this._hass) return;
+    const state = this.getState();
+    const a = state?.attributes || {};
+    const meals = a.meals || [];
+    const days = a.days || [];
+    const dayRows = days.map((d, index) => {
+      const entry = d.entry;
+      return `<article class="day ${entry ? 'planned' : 'empty'}" data-day="${d.date}">
+        <div class="date"><b>${['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'][index]}</b><small>${new Date(d.date + 'T12:00:00').toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}</small></div>
+        <div class="day-content"><button class="day-main" data-action="open-day" data-date="${d.date}"><strong>${entry ? this.esc(entry.title) : 'Essen einplanen'}</strong><small>${entry ? `Eingetragen von ${this.esc(entry.planned_by)}${entry.planned_at ? ` · ${this.time(entry.planned_at)}` : ''}` : 'Tippen zum Eintragen'}</small></button>${entry?.link ? `<a class="meal-link" href="${this.esc(entry.link)}" target="_blank" rel="noopener" data-stop>Link ↗</a>` : ''}</div>
+        <div class="day-actions">${entry ? `<button class="icon-button" data-action="open-day" data-date="${d.date}" aria-label="Bearbeiten" title="Bearbeiten">✎</button><button class="icon-button danger" data-action="confirm-delete-day" data-date="${d.date}" aria-label="Löschen" title="Löschen">×</button>` : `<button class="icon-button add" data-action="open-day" data-date="${d.date}" aria-label="Essen einplanen" title="Essen einplanen">+</button>`}</div>
+      </article>`;
+    }).join('');
+    const mealRows = meals.map((meal) => `<article class="meal-row"><div class="meal-main"><strong>${this.esc(meal.name)}</strong><span class="tag ${meal.meat ? 'meat' : 'veg'}">${meal.meat ? 'Mit Fleisch' : 'Vegetarisch'}</span><small>Isst gern: ${this.esc((meal.eaters || []).join(', ') || 'Keine Personen zugeordnet')}</small></div><div class="row-actions"><button data-action="edit-meal" data-id="${this.esc(meal.id)}">Bearbeiten</button><button class="danger" data-action="confirm-delete-meal" data-id="${this.esc(meal.id)}" aria-label="Gericht löschen">Löschen</button></div></article>`).join('');
+    this.shadowRoot.innerHTML = `<style>
+      :host{display:block;color:var(--primary-text-color,#212121);font-family:var(--ha-font-family-body,Roboto,Arial,sans-serif);font-size:14px}*{box-sizing:border-box}ha-card{display:block;background:var(--ha-card-background,var(--card-background-color,#fff));border:var(--ha-card-border-width,1px) solid var(--ha-card-border-color,var(--divider-color,#e0e0e0));border-radius:var(--ha-card-border-radius,12px);box-shadow:var(--ha-card-box-shadow,none);overflow:hidden}
+      button,input,select{font:inherit}button{color:var(--primary-color,#03a9f4);border:0;background:transparent;border-radius:var(--ha-button-border-radius,20px);padding:9px 14px;cursor:pointer;line-height:1.35;font-weight:500}button:hover{background:color-mix(in srgb,var(--primary-color,#03a9f4) 8%,transparent)}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--primary-color,#03a9f4);outline-offset:2px}button.primary{background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff)}button.danger{color:var(--error-color,#db4437)}
+      .card-top{display:flex;align-items:stretch;border-bottom:1px solid var(--divider-color,#e0e0e0);min-height:52px}nav{display:flex;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;padding:0 8px}nav::-webkit-scrollbar{display:none}nav button{flex-shrink:0;border-radius:0;border-bottom:2px solid transparent;color:var(--secondary-text-color,#727272);padding:16px 14px;white-space:nowrap;font-size:14px}nav button.selected{border-bottom-color:var(--primary-color,#03a9f4);color:var(--primary-color,#03a9f4)}.settings-button{width:50px;flex-shrink:0;display:grid;place-items:center;padding:12px;border-radius:0;color:var(--secondary-text-color,#727272)}.settings-button.selected{color:var(--primary-color,#03a9f4);background:color-mix(in srgb,var(--primary-color,#03a9f4) 8%,transparent)}.settings-button svg{width:23px;height:23px;fill:currentColor}
+      main{padding:8px 16px 16px}.page-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 0}.page-actions h2{font-size:18px;font-weight:500;margin:0}.import-control{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--divider-color,#e0e0e0);font-size:13px;color:var(--secondary-text-color,#727272)}.import-control input{max-width:56%;font-size:12px}.toolbar{display:flex;align-items:center;gap:8px}.week{display:flex;justify-content:space-between;align-items:center;margin:8px 0 12px}.days{display:grid;gap:0}.day{display:grid;grid-template-columns:54px minmax(0,1fr) auto;align-items:center;gap:12px;padding:10px 2px;border-bottom:1px solid var(--divider-color,#e0e0e0);min-height:72px}.day:first-child{border-top:1px solid var(--divider-color,#e0e0e0)}.date{display:grid;text-align:center;gap:3px}.date b{font-size:14px;font-weight:600}.date small,.meal-main small,.day-main small,.hint{font-size:12px;line-height:1.5;color:var(--secondary-text-color,#727272)}.day-content{display:grid;justify-items:start;min-width:0;gap:2px}.day-main{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:0;padding:4px 0;text-align:left;color:var(--primary-text-color,#212121);border-radius:4px}.day-main strong{font-size:15px;font-weight:500;overflow-wrap:anywhere}.day.empty .day-main strong{color:var(--secondary-text-color,#727272);font-weight:400}.meal-link{color:var(--primary-color,#03a9f4);font-size:12px}.day-actions{display:flex;gap:0}.icon-button{display:grid;place-items:center;width:40px;height:40px;padding:6px;font-size:18px}.icon-button.add{font-size:23px}.icon-button.danger,.row-actions .danger{color:var(--error-color,#db4437)}
+      .notice{position:fixed;z-index:10001;top:calc(10px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);max-width:min(560px,calc(100% - 24px));padding:10px 12px;margin:8px 0;border-radius:8px;background:var(--secondary-background-color,#f5f5f5);color:var(--primary-text-color,#212121)}.notice.error{background:var(--error-color,#db4437);color:#fff}.empty-state{padding:24px 10px;text-align:center;color:var(--secondary-text-color,#727272)}.history{margin:8px 0 0;padding-left:20px;max-height:260px;overflow:auto;font-size:12px;color:var(--secondary-text-color,#727272)}details{border-top:1px solid var(--divider-color,#e0e0e0);margin-top:12px;padding:12px 0 0}summary{cursor:pointer;color:var(--secondary-text-color,#727272)}
+      .meal-row{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 0;border-bottom:1px solid var(--divider-color,#e0e0e0)}.meal-main{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0}.meal-main strong{font-size:15px;font-weight:500;overflow-wrap:anywhere}.tag{font-size:11px;padding:3px 8px;border-radius:12px}.tag.meat{background:color-mix(in srgb,var(--warning-color,#ff9800) 14%,transparent);color:var(--warning-color,#ef6c00)}.tag.veg{background:color-mix(in srgb,var(--success-color,#4caf50) 14%,transparent);color:var(--success-color,#388e3c)}.row-actions{display:flex;gap:2px;flex-shrink:0}.row-actions button{padding:8px}
+      .overlay{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:16px;background:rgba(0,0,0,.42)}.dialog{width:min(560px,100%);max-height:min(90vh,780px);overflow:auto;background:var(--ha-card-background,var(--card-background-color,#fff));color:var(--primary-text-color,#212121);border-radius:16px;box-shadow:0 12px 40px #0004;padding:20px}.dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}.dialog-head h2{font-size:20px;font-weight:500;margin:0}.close{font-size:23px;width:38px;height:38px;padding:4px}.form-grid{display:grid;gap:14px}.field{display:grid;gap:6px}.field>span,.group-label{font-size:13px;font-weight:500}.field input[type=text],.field input[type=url],.field select,.search-select{width:100%;min-height:44px;border:1px solid var(--divider-color,#ccc);border-radius:8px;padding:10px 12px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#212121)}.choice-row,.check-grid{display:flex;flex-wrap:wrap;gap:8px}.choice,.person-choice{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--divider-color,#ddd);border-radius:22px;padding:9px 12px;cursor:pointer}.choice:has(input:checked),.person-choice:has(input:checked){border-color:var(--primary-color,#03a9f4);background:color-mix(in srgb,var(--primary-color,#03a9f4) 9%,transparent)}input[type=checkbox],input[type=radio]{accent-color:var(--primary-color,#03a9f4);width:16px;height:16px;margin:0}.saved-meal-picker{display:grid;gap:8px}.saved-meal-picker select{max-height:260px}.check-grid{margin-top:8px}.dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;padding-top:12px;border-top:1px solid var(--divider-color,#e0e0e0)}.dialog .hint{margin-top:-4px}.confirm-copy{font-size:14px;line-height:1.5}
+      @media(max-width:520px){main{padding:6px 12px 12px}.day{grid-template-columns:44px minmax(0,1fr) auto;gap:8px;min-height:68px}.icon-button{width:34px;height:38px}.row-actions{flex-direction:column;align-items:flex-end}.dialog{padding:16px}.tabs button{padding:15px 12px}}
+    </style><ha-card><div class="card-top"><nav aria-label="Essensplaner"><button data-action="view" data-view="week" class="${this._view === 'week' ? 'selected' : ''}">Essensplan</button></nav><button class="settings-button ${this._view === 'settings' ? 'selected' : ''}" data-action="view" data-view="settings" aria-label="Einstellungen" title="Einstellungen" aria-current="${this._view === 'settings' ? 'page' : 'false'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.2 7.2 0 0 0-1.63-.94l-.36-2.54A.49.49 0 0 0 13.88 2h-3.76a.49.49 0 0 0-.49.42L9.27 4.96c-.59.23-1.13.55-1.63.94l-2.39-.96a.5.5 0 0 0-.61.22L2.72 8.48a.5.5 0 0 0 .12.64l2.03 1.58a6.8 6.8 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .61.22l2.39-.96c.5.39 1.04.71 1.63.94l.36 2.54a.49.49 0 0 0 .49.42h3.76a.49.49 0 0 0 .49-.42l.36-2.54c.59-.23 1.13-.55 1.63-.94l2.39.96a.5.5 0 0 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg></button></div><main>
+      ${this._view === 'week' ? `<div class="week"><button data-action="shift" data-shift="-1" aria-label="Vorherige Woche">‹</button><strong>${this.weekLabel(a.week_start, a.week_end)}</strong><button data-action="today">Heute</button><button data-action="shift" data-shift="1" aria-label="Nächste Woche">›</button></div><div class="days">${dayRows || `<div class="empty-state">${state ? 'Für diese Woche sind keine Einträge verfügbar.' : 'Der Wochenplan-Sensor ist nicht geladen. Bitte Integration und Home-Assistant-Protokoll prüfen.'}</div>`}</div><details><summary>Änderungsverlauf</summary><ul class="history">${(a.history || []).map((h) => `<li>${this.esc(h.by)} · ${this.esc(h.action)} · ${this.esc(h.date)}${h.after ? ': ' + this.esc(h.after) : ''}</li>`).join('') || '<li>Noch keine Änderungen.</li>'}</ul></details>` : `<div class="page-actions"><h2>Gerichte</h2><button class="primary" data-action="new-meal">+ Gericht hinzufügen</button></div><p class="hint">Hier pflegst du eure gespeicherten Gerichte und die Personen, die sie gern essen.</p><label class="import-control">Gerichte aus der Site übernehmen <input data-import type="file" accept="application/json,.json"></label><div class="meal-list">${mealRows || '<div class="empty-state">Noch keine Gerichte gespeichert. Importiere eine JSON-Datei oder füge ein Gericht hinzu.</div>'}</div>`}
+      ${this._notice ? `<div class="notice ${this._noticeError ? 'error' : ''}" role="status">${this.esc(this._notice)}</div>` : ''}
+      ${this._modal ? this.renderModal(meals) : ''}
+    </main></ha-card>`;
+    this.shadowRoot.querySelectorAll('[data-action="view"]').forEach((b) => b.onclick = () => { this._view = b.dataset.view; this._modal = null; this.render(); });
+    this.shadowRoot.querySelectorAll('[data-action]').forEach((b) => b.onclick = (event) => { event.stopPropagation(); this.action(b.dataset.action, b.dataset); });
+    this.shadowRoot.querySelectorAll('[data-stop]').forEach((el) => el.onclick = (event) => event.stopPropagation());
+    this.shadowRoot.querySelectorAll('.day').forEach((el) => el.onclick = () => this.openDay(el.dataset.day));
+    const saveToggle = this.shadowRoot.querySelector('[data-field="save-to-catalog"]');
+    if (saveToggle) saveToggle.onchange = () => { this._modal.saveToCatalog = saveToggle.checked; this.render(); };
+    const file = this.shadowRoot.querySelector('[data-import]');
+    if (file) file.onchange = async () => { const selected = file.files?.[0]; if (!selected) return; try { const catalog = JSON.parse(await selected.text()); await this.call('import_catalog', { catalog }); this.notify(`${Array.isArray(catalog.meals) ? catalog.meals.length : 'Die'} Gerichte wurden übernommen.`); } catch (error) { this.notify(error.message || 'Import fehlgeschlagen.', true); } file.value = ''; };
+    this.bindSwipe();
+  }
+
+  renderModal(meals) {
+    const modal = this._modal;
+    if (modal.type === 'meal-confirm' || modal.type === 'day-confirm') return `<div class="overlay"><section class="dialog" role="dialog" aria-modal="true"><div class="dialog-head"><h2>${modal.type === 'meal-confirm' ? 'Gericht löschen?' : 'Tageseintrag löschen?'}</h2><button class="close" data-action="close-modal" aria-label="Schließen">×</button></div><p class="confirm-copy">${modal.type === 'meal-confirm' ? `Soll „${this.esc(modal.meal.name)}“ wirklich aus der Gerichte-Liste entfernt werden?` : `Soll der Essenseintrag für ${this.esc(modal.date)} gelöscht werden?`}</p><div class="dialog-actions"><button data-action="close-modal">Abbrechen</button><button class="danger" data-action="delete-confirmed">Löschen</button></div></section></div>`;
+    if (modal.type === 'meal') {
+      const existing = modal.meal || {};
+      const checked = new Set(existing.eaters || []);
+      return `<div class="overlay"><section class="dialog" role="dialog" aria-modal="true"><div class="dialog-head"><h2>${existing.id ? 'Gericht bearbeiten' : 'Neues Gericht'}</h2><button class="close" data-action="close-modal" aria-label="Schließen">×</button></div><div class="form-grid"><label class="field"><span>Name des Gerichts</span><input type="text" data-field="name" value="${this.esc(existing.name || '')}" maxlength="120" autocomplete="off" placeholder="z. B. Gemüse-Lasagne"></label><div class="field"><span>Art des Gerichts</span><div class="choice-row"><label class="choice"><input type="radio" name="meal-type" value="veg" ${existing.meat ? '' : 'checked'}> Vegetarisch</label><label class="choice"><input type="radio" name="meal-type" value="meat" ${existing.meat ? 'checked' : ''}> Mit Fleisch</label></div></div><div class="field"><span class="group-label">Wer isst das Gericht gern?</span><div class="check-grid">${['Vera', 'Manuel', 'Maximilian', 'Paul'].map((person) => `<label class="person-choice"><input type="checkbox" data-eater="${person}" ${checked.has(person) ? 'checked' : ''}> ${person}</label>`).join('')}</div><small class="hint">Die Vorlieben helfen bei passenden Vorschlägen. Maximilian isst vegetarisch.</small></div></div><div class="dialog-actions"><button data-action="close-modal">Abbrechen</button><button class="primary" data-action="save-meal">Speichern</button></div></section></div>`;
+    }
+    const date = modal.date;
+    const entry = modal.entry || {};
+    const edit = Boolean(entry.title);
+    const free = modal.kind !== 'saved';
+    const selectedMeal = meals.find((m) => m.id === entry.meal_id) || null;
+    const selectedName = selectedMeal?.name || '';
+    return `<div class="overlay"><section class="dialog" role="dialog" aria-modal="true"><div class="dialog-head"><h2>${edit ? 'Eintrag bearbeiten' : 'Essen einplanen'}</h2><button class="close" data-action="close-modal" aria-label="Schließen">×</button></div><div class="form-grid"><div class="field"><span>Für ${this.esc(new Date(date + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' }))}</span><div class="choice-row"><label class="choice"><input type="radio" name="plan-kind" value="free" data-action="plan-kind" ${free ? 'checked' : ''}> Frei eintragen</label><label class="choice"><input type="radio" name="plan-kind" value="saved" data-action="plan-kind" ${free ? '' : 'checked'}> Aus Gerichten wählen</label></div></div>${free ? `<label class="field"><span>Mahlzeit</span><input type="text" data-field="text" value="${this.esc(modal.freeText ?? (entry.title || ''))}" maxlength="240" placeholder="Essen eintragen" autocomplete="off"></label><label class="field"><span>Link (optional)</span><input type="url" data-field="link" value="${this.esc(modal.link ?? (entry.link || ''))}" placeholder="https://…" inputmode="url"></label><label class="person-choice"><input type="checkbox" data-field="save-to-catalog" ${modal.saveToCatalog ? 'checked' : ''}> Auch in Gerichte speichern</label><div class="catalog-extra" ${modal.saveToCatalog ? '' : 'hidden'}><div class="field"><span>Art des Gerichts</span><div class="choice-row"><label class="choice"><input type="radio" name="new-meal-type" value="veg" checked> Vegetarisch</label><label class="choice"><input type="radio" name="new-meal-type" value="meat"> Mit Fleisch</label></div></div><div class="field"><span class="group-label">Wer isst es gern?</span><div class="check-grid">${['Vera', 'Manuel', 'Maximilian', 'Paul'].map((person) => `<label class="person-choice"><input type="checkbox" data-new-eater="${person}" ${['Vera', 'Manuel', 'Paul'].includes(person) ? 'checked' : ''}> ${person}</label>`).join('')}</div></div></div>` : `<div class="field saved-meal-picker"><span>Gericht suchen und auswählen</span><input class="search-select" data-field="meal-search" list="meal-options" value="${this.esc(modal.mealName ?? selectedName)}" placeholder="Gericht eingeben oder Liste öffnen" autocomplete="off"><datalist id="meal-options">${meals.map((m) => `<option value="${this.esc(m.name)}"></option>`).join('')}</datalist><small class="hint">Beim Öffnen stehen alle gespeicherten Gerichte zur Auswahl. Tippe zum Filtern.</small></div><label class="field"><span>Link (optional)</span><input type="url" data-field="link" value="${this.esc(entry.link || '')}" placeholder="https://…" inputmode="url"></label>`}</div><div class="dialog-actions"><button data-action="close-modal">Abbrechen</button><button class="primary" data-action="save-day">Einplanen</button></div></section></div>`;
+  }
+
+  bindSwipe() {
+    const days = this.shadowRoot.querySelector('.days');
+    if (!days) return;
+    let start = null;
+    days.addEventListener('touchstart', (event) => { if (event.touches.length === 1) start = [event.touches[0].clientX, event.touches[0].clientY]; }, { passive: true });
+    days.addEventListener('touchend', (event) => {
+      if (!start || !event.changedTouches.length) return;
+      const dx = event.changedTouches[0].clientX - start[0]; const dy = event.changedTouches[0].clientY - start[1]; start = null;
+      const a = this.getState()?.attributes || {};
+      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.2) { const day = new Date((a.week_start || new Date().toISOString().slice(0, 10)) + 'T12:00:00'); day.setDate(day.getDate() + (dx < 0 ? 7 : -7)); this.call('show_week', { date: day.toISOString().slice(0, 10) }).catch((e) => this.notify(e.message, true)); }
+      else if (dy > 70 && Math.abs(dy) > Math.abs(dx) * 1.2) this.call('show_week', { date: a.week_start }).catch((e) => this.notify(e.message, true));
+    }, { passive: true });
+  }
+
+  notify(message, error = false) { this._notice = message; this._noticeError = error; this.render(); }
+  openDay(date) {
+    const state = this.getState()?.attributes || {};
+    const entry = (state.days || []).find((d) => d.date === date)?.entry || {};
+    this._modal = { type: 'day', date, entry, kind: entry.meal_id ? 'saved' : 'free', saveToCatalog: false };
+    this.render();
+    this.shadowRoot.querySelector('[data-field="text"]')?.focus();
+  }
+  async action(action, data) {
+    if (action === 'view') { this._view = data.view; this._modal = null; this._notice = ''; this.render(); return; }
+    if (action === 'shift' || action === 'today') {
+      const attr = this.getState()?.attributes || {};
+      const date = action === 'today' ? new Date().toISOString().slice(0, 10) : (() => { const d = new Date((attr.week_start || new Date().toISOString().slice(0, 10)) + 'T12:00:00'); d.setDate(d.getDate() + Number(data.shift) * 7); return d.toISOString().slice(0, 10); })();
+      try { await this.call('show_week', { date }); } catch (e) { this.notify(e.message, true); } return;
+    }
+    if (action === 'open-day') { this.openDay(data.date); return; }
+    if (action === 'new-meal') { this._modal = { type: 'meal', meal: null }; this.render(); this.shadowRoot.querySelector('[data-field="name"]')?.focus(); return; }
+    if (action === 'edit-meal') { const meal = (this.getState()?.attributes.meals || []).find((m) => m.id === data.id); if (meal) { this._modal = { type: 'meal', meal: { ...meal, eaters: [...(meal.eaters || [])] } }; this.render(); this.shadowRoot.querySelector('[data-field="name"]')?.focus(); } return; }
+    if (action === 'confirm-delete-meal') { const meal = (this.getState()?.attributes.meals || []).find((m) => m.id === data.id); if (meal) { this._modal = { type: 'meal-confirm', meal }; this.render(); } return; }
+    if (action === 'confirm-delete-day') { this._modal = { type: 'day-confirm', date: data.date }; this.render(); return; }
+    if (action === 'close-modal' || action === 'overlay-close') { if (action === 'overlay-close' && event?.target !== event?.currentTarget) return; this._modal = null; this.render(); return; }
+    if (action === 'plan-kind') {
+      this._modal.freeText = this.shadowRoot.querySelector('[data-field="text"]')?.value || this._modal.freeText || '';
+      this._modal.mealName = this.shadowRoot.querySelector('[data-field="meal-search"]')?.value || this._modal.mealName || '';
+      this._modal.link = this.shadowRoot.querySelector('[data-field="link"]')?.value || '';
+      this._modal.saveToCatalog = this.shadowRoot.querySelector('[data-field="save-to-catalog"]')?.checked || false;
+      this._modal.kind = data.value; this.render(); return;
+    }
+    if (action === 'save-meal') { await this.saveMeal(); return; }
+    if (action === 'save-day') { await this.saveDay(); return; }
+    if (action === 'delete-confirmed') { await this.deleteConfirmed(); return; }
+  }
+
+  async saveMeal() {
+    const name = this.shadowRoot.querySelector('[data-field="name"]')?.value.trim() || '';
+    const meat = this.shadowRoot.querySelector('[name="meal-type"]:checked')?.value === 'meat';
+    const eaters = [...this.shadowRoot.querySelectorAll('[data-eater]:checked')].map((e) => e.dataset.eater);
+    if (!name) { this.notify('Bitte einen Namen für das Gericht eingeben.', true); return; }
+    if (!eaters.length) { this.notify('Bitte mindestens eine Person auswählen, die das Gericht gern isst.', true); return; }
+    if (meat && eaters.includes('Maximilian')) { this.notify('Maximilian isst vegetarisch. Bitte entferne ihn bei einem Fleischgericht.', true); return; }
+    try { await this.call('save_meal', { ...(this._modal.meal?.id ? { id: this._modal.meal.id } : {}), name, meat, eaters }); this._modal = null; this._notice = 'Gericht gespeichert.'; this._noticeError = false; this.render(); }
+    catch (error) { this.notify(error.message || 'Gericht konnte nicht gespeichert werden.', true); }
+  }
+
+  async saveDay() {
+    const modal = this._modal; const state = this.getState()?.attributes || {}; const link = this.shadowRoot.querySelector('[data-field="link"]')?.value.trim() || '';
+    const saveToCatalog = this.shadowRoot.querySelector('[data-field="save-to-catalog"]')?.checked || false;
+    const kind = this.shadowRoot.querySelector('[name="plan-kind"]:checked')?.value || modal.kind;
+    const payload = { date: modal.date };
+    if (kind === 'saved') {
+      const name = this.shadowRoot.querySelector('[data-field="meal-search"]')?.value.trim() || '';
+      const meal = (state.meals || []).find((m) => m.name.toLocaleLowerCase() === name.toLocaleLowerCase());
+      if (!meal) { this.notify('Bitte ein gespeichertes Gericht aus der Liste auswählen.', true); return; }
+      payload.meal_id = meal.id;
+    } else {
+      const text = this.shadowRoot.querySelector('[data-field="text"]')?.value.trim() || '';
+      if (!text) { this.notify('Bitte ein Essen eintragen.', true); return; }
+      if (saveToCatalog) {
+        const meat = this.shadowRoot.querySelector('[name="new-meal-type"]:checked')?.value === 'meat';
+        const eaters = [...this.shadowRoot.querySelectorAll('[data-new-eater]:checked')].map((e) => e.dataset.newEater);
+        if (!eaters.length) { this.notify('Bitte auswählen, wer das Gericht gern isst.', true); return; }
+        if (meat && eaters.includes('Maximilian')) { this.notify('Maximilian isst vegetarisch. Bitte entferne ihn bei einem Fleischgericht.', true); return; }
+        try { const id = `meal-${crypto.randomUUID()}`; await this.call('save_meal', { id, name: text, meat, eaters }); payload.meal_id = id; }
+        catch (error) { this.notify(error.message || 'Gericht konnte nicht gespeichert werden.', true); return; }
+      } else payload.text = text;
+    }
+    if (link) payload.link = link;
+    try { await this.call('plan_day', payload); this._modal = null; this._notice = 'Essen eingeplant.'; this._noticeError = false; this.render(); }
+    catch (error) { this.notify(error.message || 'Essen konnte nicht eingeplant werden.', true); }
+  }
+
+  async deleteConfirmed() {
+    const modal = this._modal;
+    try {
+      if (modal.type === 'meal-confirm') await this.call('delete_meal', { id: modal.meal.id });
+      else await this.call('plan_day', { date: modal.date, clear: true });
+      this._modal = null; this._notice = 'Eintrag gelöscht.'; this._noticeError = false; this.render();
+    } catch (error) { this.notify(error.message || 'Löschen fehlgeschlagen.', true); }
+  }
 }
-customElements.define('essensplaner-card',EssensplanerCard);
+customElements.define('essensplaner-card', EssensplanerCard);
+
 class EssensplanerPanel extends HTMLElement {
-  set hass(hass){this._hass=hass;if(!this.shadowRoot){this.attachShadow({mode:'open'});this._card=document.createElement('essensplaner-card');this._card.setConfig({});this.shadowRoot.append(this._card);}this._card.hass=hass;}
-  set narrow(value){this._narrow=value;}
-  set route(value){this._route=value;}
+  set hass(hass) {
+    this._hass = hass;
+    if (!this.shadowRoot) { this.attachShadow({ mode: 'open' }); this._card = document.createElement('essensplaner-card'); this._card.setConfig({}); this.shadowRoot.append(this._card); }
+    this._card.hass = hass;
+  }
+  set narrow(value) { this._narrow = value; }
+  set route(value) { this._route = value; }
 }
-customElements.define('essensplaner-panel',EssensplanerPanel);
+customElements.define('essensplaner-panel', EssensplanerPanel);
