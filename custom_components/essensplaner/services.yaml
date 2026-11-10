@@ -1,0 +1,43 @@
+import_catalog:
+  name: Gerichte importieren
+  description: Importiert die Gerichteliste aus dem JSON-Export der Essensplaner-Site.
+  fields:
+    catalog:
+      name: Exportdatei
+      description: Vollständigen JSON-Inhalt des Site-Exports.
+      required: true
+      selector:
+        object:
+plan_day:
+  name: Tag planen
+  description: Plant oder ändert das Essen für einen Tag.
+  fields:
+    date:
+      name: Datum
+      required: true
+      selector:
+        date: {}
+    meal_id:
+      name: Gespeichertes Gericht
+      selector:
+        text: {}
+    text:
+      name: Freitext
+      selector:
+        text: {}
+    link:
+      name: Link
+      selector:
+        text: {}
+    clear:
+      name: Löschen
+      selector:
+        boolean: {}
+show_week:
+  name: Woche anzeigen
+  description: Wechselt zur Woche eines Datums.
+  fields:
+    date:
+      name: Datum
+      selector:
+        date: {}
