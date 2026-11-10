@@ -130,7 +130,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         frontend_url_path=DOMAIN,
         sidebar_title="Essensplaner",
         sidebar_icon="mdi:silverware-fork-knife",
-        config={"_panel_custom": {"name": "essensplaner-panel", "module_url": "/essensplaner-card.js?v=1.0.8"}},
+        config={"_panel_custom": {"name": "essensplaner-panel", "module_url": "/essensplaner-card.js?v=1.0.9"}},
         require_admin=False,
         update=frontend.async_panel_exists(hass, DOMAIN),
     )
