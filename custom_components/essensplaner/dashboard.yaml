@@ -1,0 +1,7 @@
+title: Essensplaner
+views:
+  - title: Essensplaner
+    path: essensplaner
+    icon: mdi:silverware-fork-knife
+    cards:
+      - type: custom:essensplaner-card
