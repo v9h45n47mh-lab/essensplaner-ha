@@ -1,6 +1,6 @@
 # Essensplaner für Home Assistant
 
-Eine lokale Essensplaner-Integration mit Wochenkalender Montag bis Sonntag, Freitext, gespeicherten Gerichten, Links, Protokoll, Mitesser-Auswahl und Zufallsrezepten.
+Eine lokale Essensplaner-Integration mit Wochenkalender Montag bis Sonntag, Freitext, gespeicherten Gerichten, Links, Mitesser-Auswahl und Zufallsrezepten.
 
 ## Installation
 
@@ -8,13 +8,6 @@ Eine lokale Essensplaner-Integration mit Wochenkalender Montag bis Sonntag, Frei
 2. **Essensplaner** installieren und Home Assistant neu starten.
 3. Unter **Einstellungen → Geräte & Dienste → Integration hinzufügen** nach **Essensplaner** suchen. Nach dem Neustart wird die Essensplaner-Karte in Lovelace registriert. Füge sie über **Dashboard bearbeiten → Karte hinzufügen → Essensplaner** zu deinem Dashboard hinzu.
 4. In den Integrationsoptionen können die HA-Kontonamen eingetragen werden, die bestehende Plan-Einträge und Gerichte bearbeiten oder löschen dürfen. Standard: `Vera, Manuel`. HA-Administratoren dürfen alles.
-
-## Gerichte von der Site importieren
-
-1. Auf der Site unter **Gerichte hinzufügen / bearbeiten** die Schaltfläche **Gerichte für Home Assistant exportieren** wählen.
-2. In der HA-Seitenleiste **Essensplaner → Einstellungen → Gerichte aus der Site übernehmen** auswählen.
-
-Die Datei enthält nur den aktuellen Gerichtskatalog, Fleisch-Kennzeichen und Mitesser. Sie enthält keine Wochenplan-Einträge. Der Wochenplan und sein Verlauf bleiben lokal in Home Assistant.
 
 ## Essensplaner zum Dashboard hinzufügen
 
@@ -24,13 +17,13 @@ In einem normalen Lovelace-Dashboard: **Dashboard bearbeiten → Karte hinzufüg
 type: custom:essensplaner-card
 ```
 
-Wenn Lovelace-Ressourcen in `configuration.yaml` im YAML-Modus verwaltet werden, muss zusätzlich `/essensplaner-card.js?v=1.0.10` als JavaScript-Modul eingetragen werden.
+Wenn Lovelace-Ressourcen in `configuration.yaml` im YAML-Modus verwaltet werden, muss zusätzlich `/essensplaner-card.js?v=1.1.0` als JavaScript-Modul eingetragen werden.
 
 ## Ansicht und Rechte
 
-- Wochenweise Ansicht Montag bis Sonntag mit vor/zurück, Tagesplanung, Link, Bearbeiten/Löschen und Verlauf.
+- Wochenweise Ansicht Montag bis Sonntag mit vor/zurück, Tagesplanung, Link, Bearbeiten/Löschen.
 - Leere Tage können von jedem angemeldeten HA-Konto belegt werden. Bestehende Einträge und der Gerichtskatalog können nur die konfigurierten Verwalter oder HA-Administratoren ändern.
-- Gerichte werden direkt in der App hinzugefügt und bearbeitet. Das Formular zeigt Fleisch/vegetarisch und die Personen, die das Gericht gern essen.
+- Gerichte werden direkt in der App hinzugefügt und bearbeitet. Das Formular zeigt Fleisch/vegetarisch sowie die Personen, die das Gericht gern essen.
 - Wochenplanung, Bearbeiten und Löschen erfolgen in App-Dialogen ohne Browser-Pop-ups. Bei freien Mahlzeiten lassen sich Link und optional der Eintrag im Gerichtskatalog hinterlegen.
 
 - „Zufallsrezept“ schlägt passende gespeicherte Gerichte für die gewählten Mitesser vor, ohne sie direkt zu wiederholen. Mit Maximilian werden nur vegetarische Gerichte vorgeschlagen. Das ausgewählte Gericht lässt sich direkt für einen Kalendertag vormerken.\n\n## Lokale Installation ohne HACS
