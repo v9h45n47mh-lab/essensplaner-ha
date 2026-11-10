@@ -34,8 +34,8 @@ const server=http.createServer((req,res)=>{
   await card.getByRole('button',{name:'Essensplan',exact:true}).click();
   await card.getByRole('button',{name:'Essen einplanen',exact:true}).first().click();
   const search=card.getByRole('combobox',{name:'Gericht auswählen'});await search.fill('Reis');
-  assert((await card.locator('.meal-option').count())>6);
-  const list=card.locator('.meal-options');assert(await list.evaluate(el=>el.clientHeight<=336&&el.scrollHeight>el.clientHeight));
+  assert((await card.locator('.fui-option').count())>6);
+  const list=card.locator('.fui-options');assert(await list.evaluate(el=>el.clientHeight<=336&&el.scrollHeight>el.clientHeight));
   await search.press('ArrowDown');await search.press('Enter');
   await card.getByRole('button',{name:'Einplanen',exact:true}).click();await card.locator('dialog').waitFor({state:'detached'});
   await iframe.getByRole('button',{name:'Dunkles Theme',exact:true}).click();

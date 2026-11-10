@@ -13,6 +13,10 @@ if(hash(await read(release,'LICENSE'))!==lock.licenseSha256)throw new Error('UI 
 const card=await read(root,'essensplaner-card.js');
 if(!card.includes(`from '${lock.module}'`))throw new Error('Card does not import the pinned module');
 if(card.includes('<svg')||card.includes('icon(name)'))throw new Error('Card has local copies of shared icons');
+for(const helper of ['combobox','dateNavigation','weekCalendar','confirmDialog','downloadJSON','bindGestures']){
+ if(!card.includes(helper+'('))throw new Error(`Shared component not adopted: ${helper}`);
+}
+if(card.includes('.calendar-row{')||card.includes('.meal-option{')||card.includes('updateMealOptions()'))throw new Error('Card duplicates shared calendar or selection implementation');
 const version=JSON.parse(await read(new URL('../',root),'manifest.json')).version;
 if(!card.includes(`ESSENSPLANER_VERSION = '${version}'`))throw new Error('Frontend/backend versions differ');
 console.log(`Verified HA UI Kit ${lock.version}, checksums, license, local import and Essensplaner ${version}`);

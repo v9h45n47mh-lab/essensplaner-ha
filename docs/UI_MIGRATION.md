@@ -1,41 +1,50 @@
-# Essensplaner 1.3.1 – HA UI Kit
+# Essensplaner 1.4.0 – HA UI Kit 1.2.0
 
 ## Feste Einbindung
 
-- UI Kit **1.1.0** aus `v9h45n47mh-lab/ha-ui-kit`, geprüfter Quellstand `6e57c4079ff20d56a7cbd91470216c27c9767e13`.
-- Unveränderte Release-Dateien und Lizenz liegen in `custom_components/essensplaner/www/family-ui/1.1.0/`.
-- Prüfsummen und lokaler Modulpfad: `www/family-ui.lock.json`.
-- Kalender, Einstellungen, Zufallsrezept und sämtliche Dialoge verwenden `UI_CSS` und die zentralen Komponenten. Es gibt keine lokalen SVG-Kopien oder abweichende allgemeine Button-/Formularstile.
-- Fachlich spezifisch bleiben Kalenderanordnung und Suchliste mit sechs sichtbaren Treffern. Die Wochenpfeile verwenden das zentrale Pfeilsymbol gedreht; der Export verwendet das zentrale Speichersymbol.
-- `/essensplaner/` liefert den gesamten Frontendordner aus. `/essensplaner-card.js` bleibt als Kompatibilitäts-Loader für bestehende YAML-Ressourcen erhalten.
+- UI Kit **1.2.0** aus `v9h45n47mh-lab/ha-ui-kit`, geprüfter Quellstand `a3b7a7d3bd3a05a97093b2263c5b6fc7d2c4af50`.
+- Unveränderte generierte Dateien und Lizenz liegen in `custom_components/essensplaner/www/family-ui/1.2.0/`.
+- Prüfsummen und lokaler Modulpfad stehen in `www/family-ui.lock.json`. Frühere Versionen bleiben für bestehende Moduladressen enthalten.
+- Neuer Kartenpfad: `/essensplaner/essensplaner-card.js?v=1.4.0`. Der bisherige Ressourcenpfad `/essensplaner-card.js` bleibt als Kompatibilitäts-Loader erhalten.
+- Alle Dateien werden durch die vorhandene statische Frontendauslieferung bereitgestellt. Keine zusätzliche Integration, kein CDN und keine Netzwerkabhängigkeit zur Laufzeit.
 
-## Aktualisierung auf UI Kit 1.1.0
+## Gemeinsame Komponenten
 
-Essensplaner 1.3.1 bindet den aktuellen, festgehaltenen Stand des gemeinsamen Moduls ein. Die frühere UI-Version bleibt für bestehende Moduladressen mitgeliefert. Import, Prüfsummen, Versionsanzeige und Ressourcenkennung wurden gemeinsam aktualisiert. Die in 1.1.0 ergänzten Programm-Sortierbausteine betreffen keine Funktion des Essensplaners; es werden keine fachfremden Bedienelemente eingeführt.
+Navigation, Einstellungen, Zeilen, Symbole, Buttons, Schalter, Filter, Felder, Meldungen und Versionsanzeige verwenden weiterhin den gemeinsamen Baukasten. Zusätzlich werden folgende bisher lokale Umsetzungen durch 1.2.0 ersetzt:
 
-## Erhaltene Logik
+| Oberfläche / Bedienung | Gemeinsamer Baustein |
+| --- | --- |
+| Wochenwechsel und Heute | `dateNavigation` mit zentralen Links-/Rechtssymbolen |
+| Kalenderzeilen, Tagesaktion und Rezeptlink | `weekCalendar` |
+| Durchsuchbare Gerichtsauswahl, sechs sichtbare Treffer und Tastaturbedienung | `combobox` und `bindUI` |
+| Löschbestätigung für Gericht / Kalendereintrag | `confirmDialog` |
+| Optionaler Rezeptlink | `field` mit nativem Typ `url` |
+| Export des bisherigen Gerichtskatalogs | `downloadJSON` |
+| Wischen und nach unten ziehen | `bindGestures` mit Cleanup beim Rendern und Entfernen |
 
-Gerichte, Freitext mit optionalem Link und Katalogaufnahme, Teilbegriffsuche, Zufallsrezeptregeln, JSON-Export, unabhängig gewählte Wochen und Live-Aktualisierungen bleiben erhalten. Die Backend-Funktionen für Berechtigungen und Änderungen sind gegenüber 1.3.0 unverändert. Der Sensor veröffentlicht zusätzlich die Integrationsversion für die gemeinsame Versionszeile.
+Die lokalen Kalender-/Suchstile und der lokale Suchcontroller wurden entfernt. Fachlich spezifisch bleiben lediglich die Anordnung des Zufallsrezepts und die zusätzlichen Katalogfelder. Es werden keine lokalen SVG-Symbole gepflegt. Die Import-/Uploadfunktion bleibt wie bisher entfernt; der gemeinsame Downloadhelfer erweitert die Berechtigungen nicht.
 
-Der Karten-Host bleibt bestehen. Während eines offenen Dialogs werden HA-Updates entgegengenommen, ohne die Eingaben zu ersetzen. Dialogfehler werden im offenen Formular angezeigt. Native Modalität, Escape und Fokuswiederherstellung wurden im Browser geprüft. Die Ereignisdelegation wird einmal pro ShadowRoot gebunden und beim Entfernen gelöst.
+## Erhaltene Funktionen und Rechte
+
+Gerichte, freie Mahlzeiten mit optionalem Link und Katalogaufnahme, Teilbegriffsuche, Zufallsrezeptregeln, JSON-Export, lokal gewählte Kalenderwochen und Live-Aktualisierungen bleiben erhalten. Die Backendlogik ist gegenüber 1.3.1 unverändert; nur die Integrationsversion wird erhöht. Eltern-/Adminrechte sowie das Löschen eigener Einträge bleiben bestehen. HA-Aufrufe nennen weiterhin den tatsächlichen Wochenplan-Sensor als Ziel.
+
+Offene Formulare werden bei HA-Zustandsmeldungen nicht ersetzt. Die ausgewählte ID wird nur nach einer echten Auswahl übernommen und bei erneuter Texteingabe verworfen. Der gemeinsame Suchcontroller übernimmt Trefferliste und Tastatur; Essensplaner übernimmt Auswahl-ID und Bezeichnung in seinen Formularzustand. Fehlgeschlagenes Speichern zeigt den Fehler im offenen Dialog und erhält Eingaben. Freitext und Katalogoptionen bleiben beim Moduswechsel erhalten.
 
 ## Prüfungen am 10.11.2026
 
 | Prüfung | Ergebnis |
 | --- | --- |
-| UI Kit build, unit tests, build check | Bestanden |
+| UI Kit Build, Unit-Tests und Build-Abgleich | Bestanden, 15 Tests |
 | Vendor-Prüfung, Modul-/CSS-/Lizenzprüfsummen | Bestanden |
-| Frontend-DOM-Regressionen | Bestanden: Suche, Einplanen, Freitext, Auswahlzustand, Fehler, Export, getrennte Wochen, erneutes Einbinden |
-| Backend-Berechtigungen | Bestanden: eigene/fremde Einträge, Eltern/Admin, Altbestand, doppelte Namen, gleichzeitige Änderungen |
-| Desktop 1100 px, hell und dunkel | Im Chromium-Browser mit lokaler Testkarte geprüft |
-| Mobil 375, 390, 430 px | Im Chromium-Browser mit entsprechend breiten Iframes geprüft; kein horizontaler Überlauf |
-| Mobile Dialoge, 375 px | Native Dialoge passen ins Fenster; Felder ohne horizontalen Überlauf |
-| Gerichte-Suche | „Reis“ liefert zehn Testtreffer; sechs sichtbar, weitere scrollbar; Auswahl per Pfeiltasten/Enter und Einplanen geprüft |
-| Bearbeiten/Berechtigungsansicht | Gericht gespeichert; Paul sieht nur den eigenen Löschbutton und keine Einstellungen; Löschlogik zusätzlich durch DOM- und Backendtests geprüft |
-| Fokus/Escape | Escape schließt den Dialog; nach Schließen, Speichern und Einplanen liegt der Fokus wieder auf der passenden Aktion |
-| Zufallsrezept | Alle vier Personen anfangs ausgewählt |
+| Frontend-DOM-Regressionen | Bestanden: getrennte Wochen, Zeilenklick, neue Suchkomponente, Maus-/Tastaturauswahl, verworfene alte ID, Fehler, Live-Anzeige, freie Eingaben, Katalogoptionen, Bestätigung/Abbrechen, eigenes Löschen, Export, Einklappen und erneutes Einbinden |
+| Backend-Berechtigungen | Bestanden: eigene/fremde Einträge, Eltern/Admin, Altbestand, doppelte Namen und parallele Änderungen |
+| Desktop 1100 px, hell und dunkel | Im verbundenen Chromium mit lokalen Testdaten geprüft |
+| Mobil 375 / 390 / 430 px | Im Chromium mit entsprechend breiten Iframes geprüft; kein horizontaler Überlauf, mindestens 40 × 40 px Symbolbedienflächen |
+| Mobile Suche und Einplanen | Bei 375 px im dunklen Theme: „Reis“ liefert zehn passende Gerichte, sechs sichtbar und weitere scrollbar; Pfeiltaste/Enter, Auswahl-ID und sofortige Anzeige im Tag geprüft |
+| Bearbeiten | Gericht und Personenzuordnung bei 390 px gespeichert; sofortige Anzeige und Fokuswiederherstellung geprüft |
+| Pauls Rechte und Löschdialog | Einstellungen und fremde Löschaktionen ausgeblendet; Escape stellt Fokus wieder her; eigener Eintrag nach Bestätigung gelöscht und sofort entfernt |
 
-Die Bildschirmprüfungen verwenden ausschließlich lokale Beispieldaten (`tests/preview.html`, `tests/frame.html`, `tests/fixture.js`), keine produktive HA-Installation. `npm run test:browser` des Baukastens konnte im Shell-Sandbox wegen eines blockierten Chromium-Prozessstarts nicht laufen; die genannten Browserprüfungen wurden stattdessen im verbundenen Chromium ausgeführt. Ein echter iPhone-/Android-Gerätetest ist damit nicht abgedeckt.
+Die Bildschirmprüfungen verwenden ausschließlich lokale Beispieldaten (`tests/preview.html`, `tests/frame.html`, `tests/fixture.js`). Es gab keinen Test an einer produktiven HA-Installation oder einem echten Mobilgerät. Der automatisierte Playwright-Prozessstart wird in der Shell durch eine Socket-Sandboxbeschränkung blockiert; die Bildschirm- und Bedienprüfungen wurden daher im verbundenen Chromium durchgeführt. Der reproduzierbare Browser-Test wurde an die neuen Komponenten angepasst.
 
 ## Prüfungen wiederholen
 
@@ -48,4 +57,4 @@ npx playwright install chromium
 npm run test:browser
 ```
 
-Alternativ das Repository lokal per HTTP ausliefern und `/tests/preview.html` öffnen. Die Vorschau bietet 1100, 430, 390 und 375 px, helle/dunkle Themes, Testkonten und einen Knopf für Layoutmessungen. `CHROMIUM_PATH` kann für die automatischen Browserprüfungen auf ein vorhandenes Chromium zeigen.
+Alternativ das Repository lokal per HTTP ausliefern und `/tests/preview.html` öffnen. Die Vorschau bietet Desktop/Mobil, helle/dunkle Themes, Testkonten und Layoutmessungen. `CHROMIUM_PATH` kann für die automatisierten Browserprüfungen auf ein vorhandenes Chromium zeigen.

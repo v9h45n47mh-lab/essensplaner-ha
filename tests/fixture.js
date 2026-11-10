@@ -12,7 +12,7 @@ let entries={
 let card, failNext=false;
 function publish(){
  const actor=document.querySelector('#actor').value;
- const state={entity_id:'sensor.essensplaner_wochenplan',attributes:{integration_version:'1.3.1',week_start:date(0),week_end:date(6),days:Array.from({length:7},(_,i)=>({date:date(i),entry:entries[date(i)]||null})),entries:structuredClone(entries),meals:structuredClone(meals)}};
+ const state={entity_id:'sensor.essensplaner_wochenplan',attributes:{integration_version:'1.4.0',week_start:date(0),week_end:date(6),days:Array.from({length:7},(_,i)=>({date:date(i),entry:entries[date(i)]||null})),entries:structuredClone(entries),meals:structuredClone(meals)}};
  card.hass={user:{id:actor,name:actor,is_admin:false},states:{[state.entity_id]:state},callService:async(domain,service,data)=>{
   await new Promise(resolve=>setTimeout(resolve,120));
   if(failNext){failNext=false;throw new Error('Test: Speichern abgelehnt');}
@@ -46,7 +46,7 @@ document.querySelector('#check').onclick=()=>{
  const gear=root.querySelector('[data-icon="settings"]');if(gear){const st=getComputedStyle(gear);test('Zahnrad aus UI Kit mit 24 px',st.width==='24px');}
  const main=root.querySelector('main');if(main)test('Inhaltsabstand aus UI Kit',getComputedStyle(main).paddingLeft===(innerWidth<=600?'12px':'16px'));
  const modal=root.querySelector('dialog[open]');if(modal){test('Dialog passt ins Fenster',modal.getBoundingClientRect().width<=innerWidth);test('Dialoginhalt ohne horizontalen Überlauf',modal.querySelector('.modal-body').scrollWidth<=modal.querySelector('.modal-body').clientWidth+1);}
- const list=root.querySelector('.meal-options:not([hidden])');if(list){test('Höchstens sechs Treffer sichtbar',list.clientHeight<=336);results.push(`Treffer: ${list.children.length}; Höhe ${list.clientHeight}px; Scrollhöhe ${list.scrollHeight}px`);}
+ const list=root.querySelector('.fui-options:not([hidden])');if(list){test('Höchstens sechs Treffer sichtbar',list.clientHeight<=336);results.push(`Treffer: ${list.children.length}; Höhe ${list.clientHeight}px; Scrollhöhe ${list.scrollHeight}px`);}
  results.push('Theme: '+(document.documentElement.dataset.dark==='true'?'dunkel':'hell'));
  document.querySelector('#checks').textContent=results.join('\n');
 };
