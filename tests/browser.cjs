@@ -24,6 +24,8 @@ const server=http.createServer((req,res)=>{
    await contentFrame.waitForFunction(value=>innerWidth===value,width);
    await iframe.getByRole('button',{name:'Layout prüfen',exact:true}).click();
    assert(!((await iframe.locator('#checks').textContent()).includes('FAIL')));
+   await contentFrame.waitForFunction(()=>document.querySelector('#style-checks').textContent.startsWith('PASS'));
+   assert((await iframe.locator('#style-checks').textContent()).includes('UI Kit 1.2.1'));
    await page.screenshot({path:path.join(root,`test-results/settings-${width}-light.png`)});
   }
   await card.getByRole('button',{name:'Gericht bearbeiten',exact:true}).first().click();

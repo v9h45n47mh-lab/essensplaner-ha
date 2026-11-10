@@ -1,4 +1,5 @@
 import '../custom_components/essensplaner/www/essensplaner-card.js';
+import {compareKitStyles} from './style-reference.js';
 const people=['Vera','Manuel','Maximilian','Paul'];
 const key=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const monday=new Date();monday.setHours(12,0,0,0);monday.setDate(monday.getDate()-(monday.getDay()+6)%7);
@@ -9,10 +10,13 @@ let entries={
  [date(0)]:{title:'Gemüsereis mit knackigem Gemüse',meal_id:'rice-0',planned_by:'Manuel',planned_by_user_id:'Manuel',planned_at:new Date().toISOString(),link:'https://example.org/rezept'},
  [date(2)]:{title:'Reispfanne mit Feta und einem besonders langen Namen zum Umbruch auf dem Handy',meal_id:'rice-1',planned_by:'Paul',planned_by_user_id:'Paul',planned_at:new Date().toISOString()}
 };
-let card, failNext=false;
+let card, failNext=false,styleObserver,styleFrame;
+function scheduleStyleCheck(){cancelAnimationFrame(styleFrame);styleFrame=requestAnimationFrame(()=>{if(card?.isConnected)document.querySelector('#style-checks').textContent=compareKitStyles(card);});}
+window.addEventListener('resize',scheduleStyleCheck);
+new MutationObserver(scheduleStyleCheck).observe(document.documentElement,{attributes:true});
 function publish(){
  const actor=document.querySelector('#actor').value;
- const state={entity_id:'sensor.essensplaner_wochenplan',attributes:{integration_version:'1.4.0',week_start:date(0),week_end:date(6),days:Array.from({length:7},(_,i)=>({date:date(i),entry:entries[date(i)]||null})),entries:structuredClone(entries),meals:structuredClone(meals)}};
+ const state={entity_id:'sensor.essensplaner_wochenplan',attributes:{integration_version:'1.4.1',week_start:date(0),week_end:date(6),days:Array.from({length:7},(_,i)=>({date:date(i),entry:entries[date(i)]||null})),entries:structuredClone(entries),meals:structuredClone(meals)}};
  card.hass={user:{id:actor,name:actor,is_admin:false},states:{[state.entity_id]:state},callService:async(domain,service,data)=>{
   await new Promise(resolve=>setTimeout(resolve,120));
   if(failNext){failNext=false;throw new Error('Test: Speichern abgelehnt');}
@@ -28,7 +32,7 @@ function publish(){
   document.querySelector('#calls').textContent=JSON.stringify({domain,service,data},null,2);publish();
  }};
 }
-function mount(){card?.remove();card=document.createElement('essensplaner-card');card.setConfig({});document.querySelector('#mount').append(card);publish();}
+function mount(){styleObserver?.disconnect();card?.remove();card=document.createElement('essensplaner-card');card.setConfig({});document.querySelector('#mount').append(card);publish();styleObserver=new MutationObserver(scheduleStyleCheck);styleObserver.observe(card.shadowRoot,{childList:true,subtree:true,attributes:true});scheduleStyleCheck();}
 document.querySelector('#actor').onchange=mount;
 document.querySelector('#deny').onclick=()=>{failNext=true;};
 document.querySelector('#theme').onclick=()=>{
@@ -48,6 +52,6 @@ document.querySelector('#check').onclick=()=>{
  const modal=root.querySelector('dialog[open]');if(modal){test('Dialog passt ins Fenster',modal.getBoundingClientRect().width<=innerWidth);test('Dialoginhalt ohne horizontalen Überlauf',modal.querySelector('.modal-body').scrollWidth<=modal.querySelector('.modal-body').clientWidth+1);}
  const list=root.querySelector('.fui-options:not([hidden])');if(list){test('Höchstens sechs Treffer sichtbar',list.clientHeight<=336);results.push(`Treffer: ${list.children.length}; Höhe ${list.clientHeight}px; Scrollhöhe ${list.scrollHeight}px`);}
  results.push('Theme: '+(document.documentElement.dataset.dark==='true'?'dunkel':'hell'));
- document.querySelector('#checks').textContent=results.join('\n');
+ document.querySelector('#checks').textContent=results.join('\n');scheduleStyleCheck();
 };
 mount();

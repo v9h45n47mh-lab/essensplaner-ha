@@ -14,7 +14,7 @@ w.HTMLElement.prototype.scrollIntoView=function(){};
 w.eval(readFileSync(root+'/essensplaner-card.js','utf8').replace(/^import .*;\n/,`const {${exportNames}}=window.TestKit;\n`));
 const people=['Vera','Manuel','Maximilian','Paul'],cards=[],calls=[];
 let entries={},meals=Array.from({length:8},(_,i)=>({id:'m'+i,name:`Reis & Gemüse ${i}`,meat:false,eaters:[...people]})),reject=false;
-function publish(){for(const {card,name}of cards){const state={entity_id:'sensor.familienessen',attributes:{integration_version:'1.4.0',week_start:card.mondayOf(card.dateKey(new Date())),days:[],entries:JSON.parse(JSON.stringify(entries)),meals:JSON.parse(JSON.stringify(meals))}};card.hass={user:{id:name,name,is_admin:false},states:{[state.entity_id]:state},callService:async(domain,service,data)=>{if(reject){reject=false;throw Error('Speichern abgelehnt')};calls.push({domain,service,data});if(service==='plan_day'){if(data.clear)delete entries[data.date];else entries[data.date]={title:meals.find(m=>m.id===data.meal_id)?.name||data.text,meal_id:data.meal_id,planned_by:name,planned_by_user_id:name};}if(service==='save_meal'){const m={id:data.id||'new',name:data.name,meat:data.meat,eaters:data.eaters};meals.push(m)}publish();}};}}
+function publish(){for(const {card,name}of cards){const state={entity_id:'sensor.familienessen',attributes:{integration_version:'1.4.1',week_start:card.mondayOf(card.dateKey(new Date())),days:[],entries:JSON.parse(JSON.stringify(entries)),meals:JSON.parse(JSON.stringify(meals))}};card.hass={user:{id:name,name,is_admin:false},states:{[state.entity_id]:state},callService:async(domain,service,data)=>{if(reject){reject=false;throw Error('Speichern abgelehnt')};calls.push({domain,service,data});if(service==='plan_day'){if(data.clear)delete entries[data.date];else entries[data.date]={title:meals.find(m=>m.id===data.meal_id)?.name||data.text,meal_id:data.meal_id,planned_by:name,planned_by_user_id:name};}if(service==='save_meal'){const m={id:data.id||'new',name:data.name,meat:data.meat,eaters:data.eaters};meals.push(m)}publish();}};}}
 function create(name){const card=w.document.createElement('essensplaner-card');card.setConfig({});w.document.body.append(card);cards.push({card,name});publish();return card}
 const q=(c,s)=>c.shadowRoot.querySelector(s),click=(c,s)=>{const el=q(c,s);assert(el,s);el.click()},input=(c,s,value)=>{const el=q(c,s);el.value=value;el.dispatchEvent(new w.Event('input',{bubbles:true}))};
 const tick=()=>new Promise(r=>setImmediate(r));
@@ -25,11 +25,13 @@ const tick=()=>new Promise(r=>setImmediate(r));
  click(paul,'[data-page="random"]');assert.equal(paul.shadowRoot.querySelectorAll('[role="switch"][aria-checked="true"]').length,4);
  click(paul,'[data-action="suggest"]');assert.equal(paul._suggestion.meal.meat,false);
  console.log('PASS shared navigation, independent weeks, settings permissions and random people');
+ assert.equal(q(manuel,'style').textContent,w.TestKit.UI_CSS);
+ assert.equal(manuel.shadowRoot.querySelectorAll('[style]').length,0);
  const date=base;
  click(manuel,`[data-ui-calendar-day="${date}"] strong`);assert.equal(manuel._modal.date,date);assert.equal(manuel._modal.kind,'saved');
  input(manuel,'#meal-search','REIS');assert.equal(manuel.shadowRoot.querySelectorAll('[data-ui-option]:not([hidden])').length,8);
  click(manuel,'[data-ui-option][data-value="m2"]');publish();assert.equal(q(manuel,'#meal-search').value,'Reis & Gemüse 2');
- reject=true;await manuel.saveDay();assert.equal(q(manuel,'[data-dialog-feedback] [role="alert"]').textContent,'Speichern abgelehnt');assert.equal(q(manuel,'#meal-search').value,'Reis & Gemüse 2');
+ reject=true;await manuel.saveDay();assert.equal(q(manuel,'[data-dialog-feedback] [role="alert"]').textContent,'Speichern abgelehnt');assert.equal(q(manuel,'[data-dialog-feedback]').hidden,false);assert.equal(q(manuel,'#meal-search').value,'Reis & Gemüse 2');
  await manuel.saveDay();await tick();assert.equal(entries[date].meal_id,'m2');assert.equal(calls.at(-1).data.entity_id,'sensor.familienessen');assert(q(manuel,'[data-shell]').textContent.includes('Reis & Gemüse 2'));
  manuel.openDay(date);input(manuel,'#meal-search','Kein Treffer');const beforeInvalid=calls.length;await manuel.saveDay();assert.equal(calls.length,beforeInvalid);assert.equal(manuel._modal.mealId,null);assert.equal(q(manuel,'#meal-search-control').dataset.selected,'');
  input(manuel,'#meal-search','REIS');q(manuel,'#meal-search').dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));q(manuel,'#meal-search').dispatchEvent(new w.KeyboardEvent('keydown',{key:'Enter',bubbles:true}));assert.equal(manuel._modal.mealId,'m0');

@@ -1,6 +1,6 @@
-import {UI_CSS, UI_VERSION, navigation, section, row, button, iconButton, toggle, filterButton, field, selectField, dialog, notice, versionInfo, bindUI, escapeHtml, combobox, dateNavigation, weekCalendar, confirmDialog, downloadJSON, bindGestures} from './family-ui/1.2.0/family-ui.js';
+import {UI_CSS, UI_VERSION, navigation, section, row, button, iconButton, toggle, filterButton, field, selectField, dialog, notice, versionInfo, bindUI, escapeHtml, combobox, dateNavigation, weekCalendar, confirmDialog, downloadJSON, bindGestures} from './family-ui/1.2.1/family-ui.js';
 
-const ESSENSPLANER_VERSION = '1.4.0';
+const ESSENSPLANER_VERSION = '1.4.1';
 
 class EssensplanerCard extends HTMLElement {
   setConfig(config) {
@@ -93,9 +93,7 @@ class EssensplanerCard extends HTMLElement {
   }
   ensureUI() {
     if (!this.shadowRoot.querySelector('[data-shell]')) {
-      this.shadowRoot.innerHTML = `<style>${UI_CSS}
-        .random-view{display:grid;gap:16px}.choices{margin-bottom:16px}.catalog-extra{display:grid;gap:16px}.feedback:empty{display:none}
-      </style><ha-card><div data-shell></div></ha-card><div data-dialog-host></div>`;
+      this.shadowRoot.innerHTML = `<style>${UI_CSS}</style><ha-card><div data-shell></div></ha-card><div data-dialog-host></div>`;
     }
     this._unbindUI ||= bindUI(this.shadowRoot, ({action, data, checked, element, originalEvent, value, label, date}) => {
       originalEvent.stopPropagation();
@@ -111,7 +109,7 @@ class EssensplanerCard extends HTMLElement {
         element.setAttribute('aria-checked', String(checked)); element.classList.toggle('on', checked);
         if (action === 'save-to-catalog') {
           this._modal.saveToCatalog = checked;
-          this.shadowRoot.querySelector('.catalog-extra').hidden = !checked;
+          this.shadowRoot.querySelector('[data-catalog-extra]').hidden = !checked;
         }
         return;
       }
@@ -163,8 +161,8 @@ class EssensplanerCard extends HTMLElement {
         + block({id:'export',title:'Sicherung',content:button({label:'Gerichte exportieren',icon:'save',action:'export-meals'})})
         + versionInfo({frontend:ESSENSPLANER_VERSION,backend:a.integration_version,ui:UI_VERSION});
       const randomMeal = this._suggestion?.meal;
-      const random = `<div class="random-view">${notice('Wähle aus, wer mitisst. Der Vorschlag kommt aus euren gespeicherten Gerichten.')}${block({id:'random-people',title:'Wer isst mit?',content:`<div class="toolbar">${['Vera','Manuel','Maximilian','Paul'].map(person => toggle({label:person,action:'random-person',checked:this._randomPeople.includes(person),data:{person}})).join('')}</div>`})}<div class="toolbar">${button({label:this._suggestion?'Gericht vorschlagen':'Zufallsgericht vorschlagen',action:'suggest',variant:'primary'})}${this._suggestion?button({label:'Anderes Gericht',action:'another'}):''}</div>${randomMeal?block({id:'suggestion',title:'Vorschlag',content:row({title:randomMeal.name,description:`${randomMeal.meat?'Mit Fleisch':'Vegetarisch'} · Isst gern: ${(randomMeal.eaters || []).join(', ')}`})+notice(this._suggestion.reason)+button({label:'Im Essensplan einplanen',action:'plan-suggestion',variant:'primary'})}):''}</div>`;
-      shell.innerHTML = `${navigation({label:'Essensplaner',items:[{id:'week',label:'Essensplan'},{id:'random',label:'Zufallsrezept'}],active:this._view,settings:this.isManager(),help:false})}<main>${this._view==='week'?week:this._view==='random'?random:settings}<div data-feedback class="feedback">${this._notice?notice(this._notice,{error:this._noticeError}):''}</div></main>`;
+      const random = `<div class="grid"><div class="full">${notice('Wähle aus, wer mitisst. Der Vorschlag kommt aus euren gespeicherten Gerichten.')}</div><div class="full">${block({id:'random-people',title:'Wer isst mit?',content:`<div class="toolbar">${['Vera','Manuel','Maximilian','Paul'].map(person => toggle({label:person,action:'random-person',checked:this._randomPeople.includes(person),data:{person}})).join('')}</div>`})}</div><div class="toolbar full">${button({label:this._suggestion?'Gericht vorschlagen':'Zufallsgericht vorschlagen',action:'suggest',variant:'primary'})}${this._suggestion?button({label:'Anderes Gericht',action:'another'}):''}</div>${randomMeal?'<div class="full">'+block({id:'suggestion',title:'Vorschlag',content:row({title:randomMeal.name,description:`${randomMeal.meat?'Mit Fleisch':'Vegetarisch'} · Isst gern: ${(randomMeal.eaters || []).join(', ')}`})+notice(this._suggestion.reason)+button({label:'Im Essensplan einplanen',action:'plan-suggestion',variant:'primary'})})+'</div>':''}</div>`;
+      shell.innerHTML = `${navigation({label:'Essensplaner',items:[{id:'week',label:'Essensplan'},{id:'random',label:'Zufallsrezept'}],active:this._view,settings:this.isManager(),help:false})}<main>${this._view==='week'?week:this._view==='random'?random:settings}<div data-feedback${this._notice?'':' hidden'}>${this._notice?notice(this._notice,{error:this._noticeError}):''}</div></main>`;
       this.bindSwipe();
     }
     const host = this.shadowRoot.querySelector('[data-dialog-host]');
@@ -196,7 +194,7 @@ class EssensplanerCard extends HTMLElement {
   }
   renderModal() {
     const modal = this._modal;
-    const feedback = `<div data-dialog-feedback class="feedback">${this._dialogNotice?notice(this._dialogNotice,{error:this._dialogNoticeError}):''}</div>`;
+    const feedback = `<div data-dialog-feedback${this._dialogNotice?'':' hidden'}>${this._dialogNotice?notice(this._dialogNotice,{error:this._dialogNoticeError}):''}</div>`;
     const cancel = button({label:'Abbrechen',action:'close-modal'});
     let title, content, actions;
     if (modal.type==='meal-confirm' || modal.type==='day-confirm') {
@@ -212,9 +210,9 @@ class EssensplanerCard extends HTMLElement {
     } else {
       const free = modal.kind !== 'saved';
       title = modal.entry?.title?'Eintrag bearbeiten':'Essen einplanen';
-      const choices = `<div class="full choices"><p class="hint">Für ${this.esc(new Date(modal.date+'T12:00:00').toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long'}))}</p><div class="toolbar" role="group" aria-label="Art des Eintrags">${filterButton({label:'Frei eintragen',action:'plan-kind',selected:free,data:{value:'free'}})}${filterButton({label:'Aus Gerichten auswählen',action:'plan-kind',selected:!free,data:{value:'saved'}})}</div></div>`;
+      const choices = `<div class="full"><p class="hint">Für ${this.esc(new Date(modal.date+'T12:00:00').toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long'}))}</p><div class="toolbar" role="group" aria-label="Art des Eintrags">${filterButton({label:'Frei eintragen',action:'plan-kind',selected:free,data:{value:'free'}})}${filterButton({label:'Aus Gerichten auswählen',action:'plan-kind',selected:!free,data:{value:'saved'}})}</div></div>`;
       const link = this.formField('link','Link (optional)',modal.link || '',{type:'url',placeholder:'https://…'});
-      content = `<div class="grid">${choices}${free?this.formField('text','Mahlzeit',modal.freeText || '',{maxlength:240,required:true,placeholder:'Essen eintragen'})+link+`<div class="full">${toggle({label:'Auch in Gerichte speichern',action:'save-to-catalog',checked:modal.saveToCatalog,data:{field:'save-to-catalog'}})}</div><div class="catalog-extra full" ${modal.saveToCatalog?'':'hidden'}>${this.typeField('new-meal-type',modal.newMeat)}${this.eaterFields('new-eater','new-eater',modal.newEaters || ['Vera','Manuel','Paul'])}</div>`:this.renderMealPicker()+link}</div>`;
+      content = `<div class="grid">${choices}${free?this.formField('text','Mahlzeit',modal.freeText || '',{maxlength:240,required:true,placeholder:'Essen eintragen'})+link+`<div class="full">${toggle({label:'Auch in Gerichte speichern',action:'save-to-catalog',checked:modal.saveToCatalog,data:{field:'save-to-catalog'}})}</div><div class="grid full" data-catalog-extra ${modal.saveToCatalog?'':'hidden'}>${this.typeField('new-meal-type',modal.newMeat)}${this.eaterFields('new-eater','new-eater',modal.newEaters || ['Vera','Manuel','Paul'])}</div>`:this.renderMealPicker()+link}</div>`;
       actions = cancel + button({label:'Einplanen',icon:'save',action:'save-day',variant:'primary'});
     }
     return dialog({id:'planner-dialog',title,content:feedback+content,actions});
@@ -244,7 +242,7 @@ class EssensplanerCard extends HTMLElement {
     if (this._modal) {
       this._dialogNotice = message; this._dialogNoticeError = error;
       const target = this.shadowRoot.querySelector('[data-dialog-feedback]');
-      if (target) target.innerHTML = notice(message, {error});
+      if (target) {target.hidden=false;target.innerHTML = notice(message, {error});}
       return;
     }
     this._notice = message; this._noticeError = error; this.render();

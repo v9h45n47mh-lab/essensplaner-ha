@@ -17,6 +17,9 @@ for(const helper of ['combobox','dateNavigation','weekCalendar','confirmDialog',
  if(!card.includes(helper+'('))throw new Error(`Shared component not adopted: ${helper}`);
 }
 if(card.includes('.calendar-row{')||card.includes('.meal-option{')||card.includes('updateMealOptions()'))throw new Error('Card duplicates shared calendar or selection implementation');
+const styles=[...card.matchAll(/<style>([\s\S]*?)<\/style>/g)];
+if(styles.length!==1||styles[0][1]!=='${UI_CSS}')throw new Error('Card must use exactly UI_CSS without local overrides');
+if(/\bstyle\s*=|\.style[.\[]/.test(card))throw new Error('Card has inline style overrides');
 const version=JSON.parse(await read(new URL('../',root),'manifest.json')).version;
 if(!card.includes(`ESSENSPLANER_VERSION = '${version}'`))throw new Error('Frontend/backend versions differ');
 console.log(`Verified HA UI Kit ${lock.version}, checksums, license, local import and Essensplaner ${version}`);
