@@ -8,8 +8,8 @@ import logging
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.components import frontend
 from homeassistant.components.http import StaticPathConfig
+from homeassistant.components.lovelace.const import MODE_STORAGE
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.storage import Store
@@ -124,16 +124,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except RuntimeError:
         # The static path is already registered during an in-place config-entry reload.
         pass
-    frontend.async_register_built_in_panel(
-        hass,
-        "custom",
-        frontend_url_path=DOMAIN,
-        sidebar_title="Essensplaner",
-        sidebar_icon="mdi:silverware-fork-knife",
-        config={"_panel_custom": {"name": "essensplaner-panel", "module_url": "/essensplaner-card.js?v=1.0.9"}},
-        require_admin=False,
-        update=frontend.async_panel_exists(hass, DOMAIN),
-    )
+    lovelace = hass.data.get("lovelace")
+    if lovelace and lovelace.resource_mode == MODE_STORAGE:
+        resources = lovelace.resources
+        await resources.async_get_info()
+        resource_url = "/essensplaner-card.js?v=1.0.10"
+        found_resource = False
+        for resource in resources.async_items():
+            current_url = resource.get("url", "")
+            if current_url.split("?", 1)[0] == "/essensplaner-card.js":
+                if current_url == resource_url and not found_resource:
+                    found_resource = True
+                else:
+                    await resources.async_delete_item(resource["id"])
+        if not found_resource:
+            await resources.async_create_item({"url": resource_url, "res_type": "module"})
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
