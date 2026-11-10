@@ -8,21 +8,37 @@ import logging
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.auth.permissions.const import POLICY_CONTROL
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.lovelace.const import MODE_STORAGE
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import entity_registry as er
 from .const import DOMAIN, PEOPLE, STORAGE_KEY, STORAGE_VERSION
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS = ["sensor"]
-IMPORT_SCHEMA = vol.Schema({vol.Required("catalog"): dict})
-MEAL_SCHEMA = vol.Schema({vol.Optional("id"): str, vol.Required("name"): vol.All(str, vol.Length(min=1,max=120)), vol.Required("meat"): bool, vol.Required("eaters"): [str]})
-DELETE_MEAL_SCHEMA = vol.Schema({vol.Required("id"): str})
-PLAN_SCHEMA = vol.Schema({vol.Required("date"): cv.date, vol.Optional("meal_id"): str, vol.Optional("text"): vol.All(str, vol.Length(min=1,max=240)), vol.Optional("link"): vol.All(str, vol.Length(max=2048)), vol.Optional("clear", default=False): bool})
-WEEK_SCHEMA = vol.Schema({vol.Optional("date"): cv.date})
+TARGET_FIELDS = {vol.Optional("entity_id"): cv.entity_ids}
+IMPORT_SCHEMA = vol.Schema({**TARGET_FIELDS, vol.Required("catalog"): dict})
+MEAL_SCHEMA = vol.Schema({**TARGET_FIELDS, vol.Optional("id"): str, vol.Required("name"): vol.All(str, vol.Length(min=1,max=120)), vol.Required("meat"): bool, vol.Required("eaters"): [str]})
+DELETE_MEAL_SCHEMA = vol.Schema({**TARGET_FIELDS, vol.Required("id"): str})
+PLAN_SCHEMA = vol.Schema({**TARGET_FIELDS, vol.Required("date"): cv.date, vol.Optional("meal_id"): str, vol.Optional("text"): vol.All(str, vol.Length(min=1,max=240)), vol.Optional("link"): vol.All(str, vol.Length(max=2048)), vol.Optional("clear", default=False): bool})
+WEEK_SCHEMA = vol.Schema({**TARGET_FIELDS, vol.Optional("date"): cv.date})
+
+
+async def async_validate_target(hass: HomeAssistant, entry: ConfigEntry, call: ServiceCall) -> None:
+    """Bind each action to this planner, including renamed sensor entities."""
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_week")
+    targets = call.data.get("entity_id")
+    if targets is not None and (not entity_id or targets != [entity_id]):
+        raise HomeAssistantError("Als Ziel muss der Wochenplan-Sensor dieses Essensplaners angegeben werden.")
+    if call.context.user_id:
+        user = await hass.auth.async_get_user(call.context.user_id)
+        if not user or not entity_id or not user.permissions.check_entity(entity_id, POLICY_CONTROL):
+            raise HomeAssistantError("Keine Berechtigung zum Bedienen des Essensplaner-Wochenplans.")
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     store = Store(hass, STORAGE_VERSION, f"{STORAGE_KEY}_{entry.entry_id}")
@@ -37,6 +53,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         configured = {x.strip().casefold() for x in entry.options.get("manager_names", "Vera, Manuel").split(",") if x.strip()}
         return bool(user and (user.is_admin or user.name.casefold() in configured))
     async def import_catalog(call: ServiceCall):
+        await async_validate_target(hass, entry, call)
         payload = call.data["catalog"]
         if isinstance(payload.get("catalog"), dict):
             payload = payload["catalog"]
@@ -66,6 +83,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         data["meals"]=meals
         await update()
     async def save_meal(call: ServiceCall):
+        await async_validate_target(hass, entry, call)
         if not await can_manage(call): raise HomeAssistantError("Nur Vera, Manuel oder HA-Administratoren dürfen Gerichte verwalten.")
         item=call.data
         name=" ".join(item["name"].split()); eaters=item["eaters"]
@@ -78,6 +96,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         else: meals[existing]=meal
         await update()
     async def delete_meal(call: ServiceCall):
+        await async_validate_target(hass, entry, call)
         if not await can_manage(call): raise HomeAssistantError("Nur Vera, Manuel oder HA-Administratoren dürfen Gerichte löschen.")
         meal=next((m for m in data["meals"] if m["id"]==call.data["id"]),None)
         if not meal: raise HomeAssistantError("Gericht nicht gefunden.")
@@ -86,9 +105,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if item.get("meal_id")==meal["id"]: item["meal_id"]=None
         await update()
     async def show_week(call: ServiceCall):
+        await async_validate_target(hass, entry, call)
         hass.data[DOMAIN][entry.entry_id]["week"] = call.data.get("date", date.today())
         await update()
     async def plan_day(call: ServiceCall):
+        await async_validate_target(hass, entry, call)
         target=call.data["date"].isoformat(); old=data["days"].get(target)
         if old and not await can_manage(call): raise HomeAssistantError("Bestehende Einträge dürfen nur Vera, Manuel oder HA-Administratoren ändern.")
         if call.data.get("clear"):
@@ -128,7 +149,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if lovelace and lovelace.resource_mode == MODE_STORAGE:
         resources = lovelace.resources
         await resources.async_get_info()
-        resource_url = "/essensplaner-card.js?v=1.1.0"
+        resource_url = "/essensplaner-card.js?v=1.1.1"
         found_resource = False
         for resource in resources.async_items():
             current_url = resource.get("url", "")

@@ -1,7 +1,7 @@
 class EssensplanerCard extends HTMLElement {
   setConfig(config) {
     this.config = config || {};
-    this.attachShadow({ mode: 'open' });
+    if (!this.shadowRoot) this.attachShadow({ mode: 'open' });
     this._view = 'week';
     this._modal = null;
     this._notice = '';
@@ -55,7 +55,12 @@ class EssensplanerCard extends HTMLElement {
       }, 2500);
     }).catch((error) => { this._weekRequested = null; this.notify(error.message || 'Wochenwechsel fehlgeschlagen.', true); });
   }
-  async call(service, data = {}) { return this._hass.callService('essensplaner', service, data); }
+  async call(service, data = {}) {
+    const state = this.getState();
+    const entityId = state?.entity_id || Object.entries(this._hass?.states || {}).find(([, value]) => value === state)?.[0];
+    if (!entityId) throw new Error('Der Wochenplan-Sensor ist nicht verfügbar. Bitte in Access Control zum Lesen und Bedienen freigeben.');
+    return this._hass.callService('essensplaner', service, { ...data, entity_id: entityId });
+  }
   esc(value) { return String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
   time(value) { return value ? new Date(value).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''; }
   weekLabel(start, end) {
@@ -95,8 +100,16 @@ class EssensplanerCard extends HTMLElement {
       ${this._notice ? `<div class="notice ${this._noticeError ? 'error' : ''}" role="status">${this.esc(this._notice)}</div>` : ''}
       ${this._modal ? this.renderModal(meals) : ''}
     </main></ha-card>`;
-    this.shadowRoot.querySelectorAll('[data-action="view"]').forEach((b) => b.onclick = () => { this._view = b.dataset.view; this._modal = null; this.render(); });
-    this.shadowRoot.querySelectorAll('[data-action]').forEach((b) => b.onclick = (event) => { event.stopPropagation(); this.action(b.dataset.action, b.dataset); });
+    this.shadowRoot.querySelectorAll('[data-action]').forEach((element) => {
+      if (element.matches('input[type="radio"]')) {
+        element.onchange = (event) => {
+          event.stopPropagation();
+          if (element.checked) this.action(element.dataset.action, { ...element.dataset, value: element.value });
+        };
+      } else {
+        element.onclick = (event) => { event.stopPropagation(); this.action(element.dataset.action, element.dataset); };
+      }
+    });
     this.shadowRoot.querySelectorAll('[data-stop]').forEach((el) => el.onclick = (event) => event.stopPropagation());
     this.shadowRoot.querySelectorAll('[data-random-person]').forEach((input) => input.onchange = () => { this._randomPeople = [...this.shadowRoot.querySelectorAll('[data-random-person]:checked')].map((el) => el.dataset.randomPerson); this._suggestion = null; });
     this.shadowRoot.querySelectorAll('.day').forEach((el) => el.onclick = () => this.openDay(el.dataset.day));
@@ -124,7 +137,7 @@ class EssensplanerCard extends HTMLElement {
     const edit = Boolean(entry.title);
     const free = modal.kind !== 'saved';
     const selectedMeal = meals.find((m) => m.id === (modal.mealId || entry.meal_id)) || null;
-    return `<div class="overlay"><section class="dialog" role="dialog" aria-modal="true"><div class="dialog-head"><h2>${edit ? 'Eintrag bearbeiten' : 'Essen einplanen'}</h2><button class="close" data-action="close-modal" aria-label="Schließen">×</button></div><div class="form-grid"><div class="field"><span>Für ${this.esc(new Date(date + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' }))}</span><div class="choice-row"><label class="choice"><input type="radio" name="plan-kind" value="free" data-action="plan-kind" ${free ? 'checked' : ''}> Frei eintragen</label><label class="choice"><input type="radio" name="plan-kind" value="saved" data-action="plan-kind" ${free ? '' : 'checked'}> Aus Gerichten wählen</label></div></div>${free ? `<label class="field"><span>Mahlzeit</span><input type="text" data-field="text" value="${this.esc(modal.freeText ?? (entry.title || ''))}" maxlength="240" placeholder="Essen eintragen" autocomplete="off"></label><label class="field"><span>Link (optional)</span><input type="url" data-field="link" value="${this.esc(modal.link ?? (entry.link || ''))}" placeholder="https://…" inputmode="url"></label><label class="person-choice"><input type="checkbox" data-field="save-to-catalog" ${modal.saveToCatalog ? 'checked' : ''}> Auch in Gerichte speichern</label><div class="catalog-extra" ${modal.saveToCatalog ? '' : 'hidden'}><div class="field"><span>Art des Gerichts</span><div class="choice-row"><label class="choice"><input type="radio" name="new-meal-type" value="veg" ${(modal.newMeat ?? false) ? '' : 'checked'}> Vegetarisch</label><label class="choice"><input type="radio" name="new-meal-type" value="meat" ${(modal.newMeat ?? false) ? 'checked' : ''}> Mit Fleisch</label></div></div><div class="field"><span class="group-label">Wer isst es gern?</span><div class="check-grid">${['Vera', 'Manuel', 'Maximilian', 'Paul'].map((person) => `<label class="person-choice"><input type="checkbox" data-new-eater="${person}" ${(modal.newEaters || ['Vera', 'Manuel', 'Paul']).includes(person) ? 'checked' : ''}> ${person}</label>`).join('')}</div></div></div>` : `<label class="field saved-meal-picker"><span>Gericht auswählen</span><select data-field="meal-select"><option value="">Bitte Gericht auswählen …</option>${meals.map((m) => `<option value="${this.esc(m.id)}" ${m.id === selectedMeal?.id ? 'selected' : ''}>${this.esc(m.name)} · ${m.meat ? 'Fleisch' : 'vegetarisch'} · ${this.esc((m.eaters || []).join(', '))}</option>`).join('')}</select>${meals.length ? '' : '<small class="hint">Noch keine Gerichte gespeichert.</small>'}</label><label class="field"><span>Link (optional)</span><input type="url" data-field="link" value="${this.esc(entry.link || '')}" placeholder="https://…" inputmode="url"></label>`}</div><div class="dialog-actions"><button data-action="close-modal">Abbrechen</button><button class="primary" data-action="save-day">Einplanen</button></div></section></div>`;
+    return `<div class="overlay"><section class="dialog" role="dialog" aria-modal="true"><div class="dialog-head"><h2>${edit ? 'Eintrag bearbeiten' : 'Essen einplanen'}</h2><button class="close" data-action="close-modal" aria-label="Schließen">×</button></div><div class="form-grid"><div class="field"><span>Für ${this.esc(new Date(date + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' }))}</span><div class="choice-row"><label class="choice"><input type="radio" name="plan-kind" value="free" data-action="plan-kind" ${free ? 'checked' : ''}> Frei eintragen</label><label class="choice"><input type="radio" name="plan-kind" value="saved" data-action="plan-kind" ${free ? '' : 'checked'}> Aus Gerichten wählen</label></div></div>${free ? `<label class="field"><span>Mahlzeit</span><input type="text" data-field="text" value="${this.esc(modal.freeText ?? (entry.title || ''))}" maxlength="240" placeholder="Essen eintragen" autocomplete="off"></label><label class="field"><span>Link (optional)</span><input type="url" data-field="link" value="${this.esc(modal.link ?? (entry.link || ''))}" placeholder="https://…" inputmode="url"></label><label class="person-choice"><input type="checkbox" data-field="save-to-catalog" ${modal.saveToCatalog ? 'checked' : ''}> Auch in Gerichte speichern</label><div class="catalog-extra" ${modal.saveToCatalog ? '' : 'hidden'}><div class="field"><span>Art des Gerichts</span><div class="choice-row"><label class="choice"><input type="radio" name="new-meal-type" value="veg" ${(modal.newMeat ?? false) ? '' : 'checked'}> Vegetarisch</label><label class="choice"><input type="radio" name="new-meal-type" value="meat" ${(modal.newMeat ?? false) ? 'checked' : ''}> Mit Fleisch</label></div></div><div class="field"><span class="group-label">Wer isst es gern?</span><div class="check-grid">${['Vera', 'Manuel', 'Maximilian', 'Paul'].map((person) => `<label class="person-choice"><input type="checkbox" data-new-eater="${person}" ${(modal.newEaters || ['Vera', 'Manuel', 'Paul']).includes(person) ? 'checked' : ''}> ${person}</label>`).join('')}</div></div></div>` : `<label class="field saved-meal-picker"><span>Gericht auswählen</span><select data-field="meal-select"><option value="">Bitte Gericht auswählen …</option>${meals.map((m) => `<option value="${this.esc(m.id)}" ${m.id === selectedMeal?.id ? 'selected' : ''}>${this.esc(m.name)} · ${m.meat ? 'Fleisch' : 'vegetarisch'} · ${this.esc((m.eaters || []).join(', '))}</option>`).join('')}</select>${meals.length ? '' : '<small class="hint">Noch keine Gerichte gespeichert.</small>'}</label><label class="field"><span>Link (optional)</span><input type="url" data-field="link" value="${this.esc(modal.link ?? (entry.link || ''))}" placeholder="https://…" inputmode="url"></label>`}</div><div class="dialog-actions"><button data-action="close-modal">Abbrechen</button><button class="primary" data-action="save-day">Einplanen</button></div></section></div>`;
   }
 
   bindSwipe() {
@@ -191,14 +204,16 @@ class EssensplanerCard extends HTMLElement {
     if (action === 'confirm-delete-day') { this._modal = { type: 'day-confirm', date: data.date }; this.render(); return; }
     if (action === 'close-modal' || action === 'overlay-close') { if (action === 'overlay-close' && event?.target !== event?.currentTarget) return; this._modal = null; this.render(); return; }
     if (action === 'plan-kind') {
+      if (!this._modal || !['free', 'saved'].includes(data.value)) return;
       this._modal.freeText = this.shadowRoot.querySelector('[data-field="text"]')?.value ?? this._modal.freeText ?? '';
       const mealSelect = this.shadowRoot.querySelector('[data-field="meal-select"]');
       if (mealSelect) this._modal.mealId = mealSelect.value || null;
       this._modal.link = this.shadowRoot.querySelector('[data-field="link"]')?.value ?? this._modal.link ?? '';
       this._modal.mealId = this._modal.mealId || null;
       this._modal.saveToCatalog = this.shadowRoot.querySelector('[data-field="save-to-catalog"]')?.checked ?? this._modal.saveToCatalog ?? false;
-      this._modal.newMeat = this.shadowRoot.querySelector('[name="new-meal-type"]:checked')?.value === 'meat';
-      this._modal.newEaters = [...this.shadowRoot.querySelectorAll('[data-new-eater]:checked')].map((e) => e.dataset.newEater);
+      const mealType = this.shadowRoot.querySelector('[name="new-meal-type"]:checked');
+      if (mealType) this._modal.newMeat = mealType.value === 'meat';
+      if (this.shadowRoot.querySelector('[data-new-eater]')) this._modal.newEaters = [...this.shadowRoot.querySelectorAll('[data-new-eater]:checked')].map((e) => e.dataset.newEater);
       this._modal.kind = data.value; this.render(); return;
     }
     if (action === 'save-meal') { await this.saveMeal(); return; }

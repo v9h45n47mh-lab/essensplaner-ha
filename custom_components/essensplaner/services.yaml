@@ -1,4 +1,8 @@
 import_catalog:
+  target:
+    entity:
+      - integration: essensplaner
+        domain: sensor
   name: Gerichte importieren
   description: Importiert die Gerichteliste aus dem JSON-Export der Essensplaner-Site.
   fields:
@@ -9,6 +13,10 @@ import_catalog:
       selector:
         object:
 plan_day:
+  target:
+    entity:
+      - integration: essensplaner
+        domain: sensor
   name: Tag planen
   description: Plant oder ändert das Essen für einen Tag.
   fields:
@@ -34,6 +42,10 @@ plan_day:
       selector:
         boolean: {}
 show_week:
+  target:
+    entity:
+      - integration: essensplaner
+        domain: sensor
   name: Woche anzeigen
   description: Wechselt zur Woche eines Datums.
   fields:
@@ -42,6 +54,10 @@ show_week:
       selector:
         date: {}
 save_meal:
+  target:
+    entity:
+      - integration: essensplaner
+        domain: sensor
   name: Gericht speichern
   description: Fügt ein Gericht hinzu oder aktualisiert es.
   fields:
@@ -71,6 +87,10 @@ save_meal:
             - Maximilian
             - Paul
 delete_meal:
+  target:
+    entity:
+      - integration: essensplaner
+        domain: sensor
   name: Gericht löschen
   description: Entfernt ein gespeichertes Gericht.
   fields:
