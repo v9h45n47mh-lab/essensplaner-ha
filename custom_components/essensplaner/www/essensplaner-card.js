@@ -1,6 +1,6 @@
-import {UI_CSS, UI_VERSION, navigation, section, row, button, iconButton, toggle, filterButton, field, selectField, dialog, notice, versionInfo, bindUI, escapeHtml} from './family-ui/1.0.0/family-ui.js';
+import {UI_CSS, UI_VERSION, navigation, section, row, button, iconButton, toggle, filterButton, field, selectField, dialog, notice, versionInfo, bindUI, escapeHtml} from './family-ui/1.1.0/family-ui.js';
 
-const ESSENSPLANER_VERSION = '1.3.0';
+const ESSENSPLANER_VERSION = '1.3.1';
 
 class EssensplanerCard extends HTMLElement {
   setConfig(config) {

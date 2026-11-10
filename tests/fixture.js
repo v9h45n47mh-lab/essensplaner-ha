@@ -12,7 +12,7 @@ let entries={
 let card, failNext=false;
 function publish(){
  const actor=document.querySelector('#actor').value;
- const state={entity_id:'sensor.essensplaner_wochenplan',attributes:{integration_version:'1.3.0',week_start:date(0),week_end:date(6),days:Array.from({length:7},(_,i)=>({date:date(i),entry:entries[date(i)]||null})),entries:structuredClone(entries),meals:structuredClone(meals)}};
+ const state={entity_id:'sensor.essensplaner_wochenplan',attributes:{integration_version:'1.3.1',week_start:date(0),week_end:date(6),days:Array.from({length:7},(_,i)=>({date:date(i),entry:entries[date(i)]||null})),entries:structuredClone(entries),meals:structuredClone(meals)}};
  card.hass={user:{id:actor,name:actor,is_admin:false},states:{[state.entity_id]:state},callService:async(domain,service,data)=>{
   await new Promise(resolve=>setTimeout(resolve,120));
   if(failNext){failNext=false;throw new Error('Test: Speichern abgelehnt');}

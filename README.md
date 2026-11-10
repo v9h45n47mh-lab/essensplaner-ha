@@ -17,7 +17,7 @@ In einem normalen Lovelace-Dashboard: **Dashboard bearbeiten → Karte hinzufüg
 type: custom:essensplaner-card
 ```
 
-Wenn Lovelace-Ressourcen in `configuration.yaml` im YAML-Modus verwaltet werden, muss zusätzlich `/essensplaner/essensplaner-card.js?v=1.3.0` als JavaScript-Modul eingetragen werden.
+Wenn Lovelace-Ressourcen in `configuration.yaml` im YAML-Modus verwaltet werden, muss zusätzlich `/essensplaner/essensplaner-card.js?v=1.3.1` als JavaScript-Modul eingetragen werden.
 
 ## Access Control
 
@@ -25,11 +25,15 @@ Den Wochenplan-Sensor (standardmäßig `sensor.essensplaner_wochenplan`) für di
 
 Nach einem Update Home Assistant neu starten und die App beziehungsweise das Dashboard neu laden. Die automatisch registrierte Karten-Ressource erhält eine neue Versionsadresse.
 
-## Änderungen in 1.3.0
+## Änderungen in 1.3.1
 
-Die gesamte Oberfläche verwendet den lokal mitgelieferten **HA UI Kit 1.0.0** aus `v9h45n47mh-lab/ha-ui-kit`: Navigation, Einstellungen, kompakte Zeilen, Symbole, Buttons, Schalter, Eingabefelder, Statusmeldungen, Versionszeile und native modale Dialoge. Farben und Schriften folgen dem Home-Assistant-Theme. Der Gerichtskatalog, die Suche mit sechs sichtbaren Treffern, Zufallsrezepte, Export, unabhängige Kalenderwochen und die bisherigen Berechtigungen bleiben erhalten.
+Der lokale HA UI Kit wurde auf **1.1.0** aktualisiert (fester Quellstand `6e57c4079ff20d56a7cbd91470216c27c9767e13`). Die neue Moduladresse und die Ressourcenkennung laden die aktualisierten Komponenten ohne Verwechslung mit der bisherigen UI-Version. Kalender, Gerichte, Formulare und Berechtigungen bleiben unverändert. Nach dem Update Home Assistant neu starten und die App bei allen Benutzern neu laden.
 
-Es wird keine zusätzliche Integration benötigt. Gemeinsames Modul, Lizenz und Prüfsummen liegen unter `custom_components/essensplaner/www/family-ui/1.0.0/`; die feste Bindung ist in `www/family-ui.lock.json` dokumentiert. Der bisherige Ressourcenpfad `/essensplaner-card.js` bleibt über einen lokalen Kompatibilitäts-Loader nutzbar.
+## Oberfläche seit 1.3.0
+
+Die gesamte Oberfläche verwendet den lokal mitgelieferten **HA UI Kit 1.1.0** aus `v9h45n47mh-lab/ha-ui-kit`: Navigation, Einstellungen, kompakte Zeilen, Symbole, Buttons, Schalter, Eingabefelder, Statusmeldungen, Versionszeile und native modale Dialoge. Farben und Schriften folgen dem Home-Assistant-Theme. Der Gerichtskatalog, die Suche mit sechs sichtbaren Treffern, Zufallsrezepte, Export, unabhängige Kalenderwochen und die bisherigen Berechtigungen bleiben erhalten.
+
+Es wird keine zusätzliche Integration benötigt. Gemeinsames Modul, Lizenz und Prüfsummen liegen unter `custom_components/essensplaner/www/family-ui/1.1.0/`; die feste Bindung ist in `www/family-ui.lock.json` dokumentiert. Der bisherige Ressourcenpfad `/essensplaner-card.js` bleibt über einen lokalen Kompatibilitäts-Loader nutzbar.
 
 Nach dem Update Home Assistant neu starten und die App beziehungsweise das Dashboard neu laden.
 

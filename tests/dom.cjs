@@ -5,14 +5,15 @@ const assert=require('node:assert/strict');
 const root=resolve(__dirname,'../custom_components/essensplaner/www');
 const dom=new JSDOM('<!doctype html><body>',{runScripts:'dangerously',url:'https://example.test'}),w=dom.window;
 const exportNames='UI_CSS,UI_VERSION,navigation,section,row,button,iconButton,toggle,filterButton,field,selectField,dialog,notice,versionInfo,bindUI,escapeHtml';
-w.eval(readFileSync(root+'/family-ui/1.0.0/family-ui.js','utf8').replace(/export /g,'')+`;window.TestKit={${exportNames}};`);
+const uiLock=JSON.parse(readFileSync(root+'/family-ui.lock.json','utf8'));
+w.eval(readFileSync(root+'/'+uiLock.module,'utf8').replace(/export /g,'')+`;window.TestKit={${exportNames}};`);
 w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
 w.HTMLDialogElement.prototype.close=function(){if(!this.open)return;this.open=false;queueMicrotask(()=>this.dispatchEvent(new w.Event('close')))};
 w.HTMLElement.prototype.scrollIntoView=function(){};
 w.eval(readFileSync(root+'/essensplaner-card.js','utf8').replace(/^import .*;\n/,`const {${exportNames}}=window.TestKit;\n`));
 const people=['Vera','Manuel','Maximilian','Paul'],cards=[],calls=[];
 let entries={},meals=Array.from({length:8},(_,i)=>({id:'m'+i,name:`Reis & Gemüse ${i}`,meat:false,eaters:[...people]})),reject=false;
-function publish(){for(const {card,name}of cards){const state={entity_id:'sensor.familienessen',attributes:{integration_version:'1.3.0',week_start:card.mondayOf(card.dateKey(new Date())),days:[],entries:JSON.parse(JSON.stringify(entries)),meals:JSON.parse(JSON.stringify(meals))}};card.hass={user:{id:name,name,is_admin:false},states:{[state.entity_id]:state},callService:async(domain,service,data)=>{if(reject){reject=false;throw Error('Speichern abgelehnt')};calls.push({domain,service,data});if(service==='plan_day'){if(data.clear)delete entries[data.date];else entries[data.date]={title:meals.find(m=>m.id===data.meal_id)?.name||data.text,meal_id:data.meal_id,planned_by:name,planned_by_user_id:name};}if(service==='save_meal'){const m={id:data.id||'new',name:data.name,meat:data.meat,eaters:data.eaters};meals.push(m)}publish();}};}}
+function publish(){for(const {card,name}of cards){const state={entity_id:'sensor.familienessen',attributes:{integration_version:'1.3.1',week_start:card.mondayOf(card.dateKey(new Date())),days:[],entries:JSON.parse(JSON.stringify(entries)),meals:JSON.parse(JSON.stringify(meals))}};card.hass={user:{id:name,name,is_admin:false},states:{[state.entity_id]:state},callService:async(domain,service,data)=>{if(reject){reject=false;throw Error('Speichern abgelehnt')};calls.push({domain,service,data});if(service==='plan_day'){if(data.clear)delete entries[data.date];else entries[data.date]={title:meals.find(m=>m.id===data.meal_id)?.name||data.text,meal_id:data.meal_id,planned_by:name,planned_by_user_id:name};}if(service==='save_meal'){const m={id:data.id||'new',name:data.name,meat:data.meat,eaters:data.eaters};meals.push(m)}publish();}};}}
 function create(name){const card=w.document.createElement('essensplaner-card');card.setConfig({});w.document.body.append(card);cards.push({card,name});publish();return card}
 const q=(c,s)=>c.shadowRoot.querySelector(s),click=(c,s)=>{const el=q(c,s);assert(el,s);el.click()},input=(c,s,value)=>{const el=q(c,s);el.value=value;el.dispatchEvent(new w.Event('input'))};
 const tick=()=>new Promise(r=>setImmediate(r));
