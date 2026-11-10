@@ -12,7 +12,7 @@ Eine lokale Essensplaner-Integration mit Wochenkalender Montag bis Sonntag, Frei
 ## Gerichte von der Site importieren
 
 1. Auf der Site unter **Gerichte hinzufügen / bearbeiten** die Schaltfläche **Gerichte für Home Assistant exportieren** wählen.
-2. In der HA-Seitenleiste **Essensplaner → Essensplan → JSON-Datei laden** auswählen.
+2. In der HA-Seitenleiste **Essensplaner → Einstellungen → Gerichte aus der Site übernehmen** auswählen.
 
 Die Datei enthält nur den aktuellen Gerichtskatalog, Fleisch-Kennzeichen und Mitesser. Sie enthält keine Wochenplan-Einträge. Der Wochenplan und sein Verlauf bleiben lokal in Home Assistant.
 
@@ -20,7 +20,8 @@ Die Datei enthält nur den aktuellen Gerichtskatalog, Fleisch-Kennzeichen und Mi
 
 - Wochenweise Ansicht Montag bis Sonntag mit vor/zurück, Tagesplanung, Link, Bearbeiten/Löschen und Verlauf.
 - Leere Tage können von jedem angemeldeten HA-Konto belegt werden. Bestehende Einträge und der Gerichtskatalog können nur die konfigurierten Verwalter oder HA-Administratoren ändern.
-- „Zufallsrezept“ schlägt nur Gerichte vor, die alle Mitesser essen. Mit Maximilian werden nur vegetarische Gerichte gezeigt. Gerichte, die möglichst vielen Abwesenden nicht schmecken, werden bevorzugt; ohne Maximilian erhalten Fleischgerichte bei Gleichstand Vorrang.
+- Gerichte werden direkt in der App hinzugefügt und bearbeitet. Das Formular zeigt Fleisch/vegetarisch und die Personen, die das Gericht gern essen.
+- Wochenplanung, Bearbeiten und Löschen erfolgen in App-Dialogen ohne Browser-Pop-ups. Bei freien Mahlzeiten lassen sich Link und optional der Eintrag im Gerichtskatalog hinterlegen.
 
 ## Lokale Installation ohne HACS
 
