@@ -108,8 +108,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except RuntimeError:
         pass
     if not hass.data[DOMAIN].get("panel_registered"):
-        frontend.async_register_built_in_panel(hass, "custom", "Essensplaner", "mdi:silverware-fork-knife", DOMAIN,
-            {"_panel_custom": {"name": "essensplaner-panel", "module_url": "/essensplaner-card.js"}}, require_admin=False)
+        frontend.async_register_built_in_panel(
+            hass,
+            "custom",
+            frontend_url_path=DOMAIN,
+            sidebar_title="Essensplaner",
+            sidebar_icon="mdi:silverware-fork-knife",
+            config={"_panel_custom": {"name": "essensplaner-panel", "module_url": "/essensplaner-card.js"}},
+            require_admin=False,
+        )
         hass.data[DOMAIN]["panel_registered"] = True
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
