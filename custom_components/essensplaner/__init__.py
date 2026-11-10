@@ -1,0 +1,99 @@
+from __future__ import annotations
+
+from datetime import date, datetime, timedelta
+from pathlib import Path
+from urllib.parse import urlparse
+import json
+import logging
+import voluptuous as vol
+
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.components import frontend
+from homeassistant.components.http import StaticPathConfig
+from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.storage import Store
+from homeassistant.helpers import config_validation as cv
+from .const import DOMAIN, PEOPLE, STORAGE_KEY, STORAGE_VERSION
+
+_LOGGER = logging.getLogger(__name__)
+PLATFORMS = ["sensor"]
+IMPORT_SCHEMA = vol.Schema({vol.Required("catalog"): dict})
+PLAN_SCHEMA = vol.Schema({vol.Required("date"): cv.date, vol.Optional("meal_id"): str, vol.Optional("text"): vol.All(str, vol.Length(min=1,max=240)), vol.Optional("link"): vol.All(str, vol.Length(max=2048)), vol.Optional("clear", default=False): bool})
+WEEK_SCHEMA = vol.Schema({vol.Optional("date"): cv.date})
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    store = Store(hass, STORAGE_VERSION, f"{STORAGE_KEY}_{entry.entry_id}")
+    data = await store.async_load() or {"meals": [], "days": {}, "history": []}
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"store": store, "data": data, "week": date.today()}
+    entry.async_on_unload(entry.add_update_listener(_options_updated))
+    async def update():
+        await store.async_save(data)
+        async_dispatcher_send(hass, f"{DOMAIN}_updated_{entry.entry_id}")
+    async def can_manage(call):
+        user = await hass.auth.async_get_user(call.context.user_id) if call.context.user_id else None
+        configured = {x.strip().casefold() for x in entry.options.get("manager_names", "Vera, Manuel").split(",") if x.strip()}
+        return bool(user and (user.is_admin or user.name.casefold() in configured))
+    async def import_catalog(call: ServiceCall):
+        payload = call.data["catalog"]
+        if payload.get("format") != "essensplaner-ha-meals" or payload.get("version") != 1 or payload.get("people") != list(PEOPLE) or not isinstance(payload.get("meals"), list):
+            raise HomeAssistantError("Ungültiger Export. Bitte die JSON-Datei aus dem Essensplaner verwenden.")
+        meals=[]
+        for m in payload["meals"]:
+            if not isinstance(m,dict) or not isinstance(m.get("id"),str) or not isinstance(m.get("name"),str) or not isinstance(m.get("meat"),bool) or not isinstance(m.get("eaters"),list) or not m["eaters"] or any(p not in PEOPLE for p in m["eaters"]):
+                raise HomeAssistantError("Ein Gericht im Export ist unvollständig oder ungültig.")
+            if m["meat"] and "Maximilian" in m["eaters"]: raise HomeAssistantError("Ein Fleischgericht darf Maximilian nicht zugeordnet sein.")
+            meals.append({"id":m["id"],"name":m["name"],"meat":m["meat"],"eaters":m["eaters"]})
+        if not await can_manage(call): raise HomeAssistantError("Nur Vera, Manuel oder ein HA-Administrator dürfen Gerichte importieren.")
+        data["meals"]=meals
+        await update()
+    async def show_week(call: ServiceCall):
+        hass.data[DOMAIN][entry.entry_id]["week"] = call.data.get("date", date.today())
+        await update()
+    async def plan_day(call: ServiceCall):
+        target=call.data["date"].isoformat(); old=data["days"].get(target)
+        if old and not await can_manage(call): raise HomeAssistantError("Bestehende Einträge dürfen nur Vera, Manuel oder HA-Administratoren ändern.")
+        if call.data.get("clear"):
+            if old and not await can_manage(call): raise HomeAssistantError("Nur Vera, Manuel oder HA-Administratoren dürfen löschen.")
+            if old: data["days"].pop(target)
+            title=old.get("title","") if old else ""
+            action="remove"
+        else:
+            meal_id=call.data.get("meal_id"); meal=next((m for m in data["meals"] if m["id"]==meal_id),None) if meal_id else None
+            if meal_id and not meal: raise HomeAssistantError("Das gespeicherte Gericht wurde nicht gefunden.")
+            title=meal["name"] if meal else " ".join(call.data.get("text","").split())
+            if not title: raise HomeAssistantError("Bitte ein Gericht wählen oder Freitext eingeben.")
+            link=call.data.get("link","").strip()
+            if link:
+                parsed=urlparse(link)
+                if parsed.scheme not in ("http","https") or not parsed.netloc or parsed.username or parsed.password: raise HomeAssistantError("Der Link muss mit http:// oder https:// beginnen.")
+            user=await hass.auth.async_get_user(call.context.user_id) if call.context.user_id else None
+            by=user.name if user else "Home Assistant"
+            data["days"][target]={"title":title,"meal_id":meal["id"] if meal else None,"link":link,"planned_by":by,"planned_at":datetime.now().astimezone().isoformat()}
+            action="replace" if old else "create"
+        data.setdefault("history",[]).insert(0,{"date":target,"action":action,"before":old.get("title","") if old else "","after":title if action!="remove" else "","by":(await hass.auth.async_get_user(call.context.user_id)).name if call.context.user_id else "Home Assistant","at":datetime.now().astimezone().isoformat()})
+        del data["history"][200:]
+        await update()
+    from homeassistant.helpers.dispatcher import async_dispatcher_send
+    hass.services.async_register(DOMAIN,"import_catalog",import_catalog, schema=IMPORT_SCHEMA)
+    hass.services.async_register(DOMAIN,"show_week",show_week, schema=WEEK_SCHEMA)
+    hass.services.async_register(DOMAIN,"plan_day",plan_day, schema=PLAN_SCHEMA)
+    panel_file = Path(__file__).parent / "www" / "essensplaner-card.js"
+    try:
+        await hass.http.async_register_static_paths([StaticPathConfig("/essensplaner-card.js", str(panel_file), cache_headers=True)])
+    except RuntimeError:
+        pass
+    if not hass.data[DOMAIN].get("panel_registered"):
+        frontend.async_register_built_in_panel(hass, "custom", "Essensplaner", "mdi:silverware-fork-knife", DOMAIN,
+            {"_panel_custom": {"name": "essensplaner-panel", "module_url": "/essensplaner-card.js"}}, require_admin=False)
+        hass.data[DOMAIN]["panel_registered"] = True
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    return True
+
+async def _options_updated(hass, entry):
+    await hass.config_entries.async_reload(entry.entry_id)
+
+async def async_unload_entry(hass, entry):
+    ok=await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if ok: hass.data[DOMAIN].pop(entry.entry_id, None)
+    return ok
