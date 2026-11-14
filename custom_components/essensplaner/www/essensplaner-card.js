@@ -1,6 +1,6 @@
 import {UI_CSS, UI_VERSION, navigation, section, row, button, iconButton, toggle, filterButton, field, selectField, dialog, notice, versionInfo, bindUI, escapeHtml, combobox, dateNavigation, weekCalendar, confirmDialog, downloadJSON, bindGestures} from './family-ui/1.2.1/family-ui.js';
 
-const ESSENSPLANER_VERSION = '1.4.1';
+const ESSENSPLANER_VERSION = '1.4.2';
 
 class EssensplanerCard extends HTMLElement {
   setConfig(config) {
@@ -47,6 +47,14 @@ class EssensplanerCard extends HTMLElement {
     if (!user?.id) return false;
     if (Object.hasOwn(entry, 'planned_by_user_id')) return entry.planned_by_user_id === user.id;
     return Boolean(entry.planned_by && String(entry.planned_by).trim().toLocaleLowerCase() === String(user.name || '').trim().toLocaleLowerCase());
+  }
+  canSaveFreeMeal(entry) {
+    if (!this.isManager() || !entry?.title || entry.meal_id) return false;
+    const name = entry.title.trim().replace(/\s+/g, ' ').toLocaleLowerCase('de-DE');
+    return !(this.getState()?.attributes.meals || []).some(meal => meal.name.trim().replace(/\s+/g, ' ').toLocaleLowerCase('de-DE') === name);
+  }
+  newMealId() {
+    return 'meal-' + Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
   }
   dateKey(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; }
   mondayOf(dateString) {
@@ -150,6 +158,7 @@ class EssensplanerCard extends HTMLElement {
         description:`Eingetragen von ${day.entry.planned_by}${day.entry.planned_at?' · '+this.time(day.entry.planned_at):''}`,
         link:day.entry.link,
         actions:iconButton({icon:'edit',label:'Eintrag bearbeiten',action:'open-day',data:{date:day.date}})
+          + (this.canSaveFreeMeal(day.entry) ? iconButton({icon:'save',label:'Als Gericht speichern',action:'save-free-meal',data:{date:day.date}}) : '')
           + (this.canDeleteEntry(day.entry) ? iconButton({icon:'trash',label:'Eintrag löschen',action:'confirm-delete-day',data:{date:day.date},danger:true}) : '')
       }));
       const end = new Date(this._weekStart+'T12:00:00'); end.setDate(end.getDate()+6);
@@ -186,8 +195,8 @@ class EssensplanerCard extends HTMLElement {
   formField(key, label, value, {type='text',placeholder='',maxlength,required=false} = {}) {
     return field({id:`ep-${key}`,label,value,type,required,placeholder,maxLength:maxlength,autocomplete:'off'}).replace('class="field"','class="field full"').replace('<input ',`<input data-field="${key}" `);
   }
-  typeField(id, value) {
-    return selectField({id,label:'Art des Gerichts',value:value?'meat':'veg',options:[{value:'veg',label:'Vegetarisch'},{value:'meat',label:'Mit Fleisch'}]}).replace('class="field"','class="field full"');
+  typeField(id, value, requireChoice = false) {
+    return selectField({id,label:'Art des Gerichts',value:requireChoice && value === undefined ? '' : value?'meat':'veg',required:requireChoice,options:[...(requireChoice ? [{value:'',label:'Bitte auswählen'}] : []),{value:'veg',label:'Vegetarisch'},{value:'meat',label:'Mit Fleisch'}]}).replace('class="field"','class="field full"');
   }
   eaterFields(action, attribute, eaters) {
     return `<div class="full"><span class="hint">Wer isst das Gericht gern?</span><div class="toolbar">${['Vera','Manuel','Maximilian','Paul'].map(person => toggle({label:person,action,checked:eaters.includes(person),data:{[attribute]:person}})).join('')}</div></div>`;
@@ -204,8 +213,8 @@ class EssensplanerCard extends HTMLElement {
         .replace('<div class="modal-body">',`<div class="modal-body">${feedback}`);
     } else if (modal.type==='meal') {
       const meal = modal.meal || {};
-      title = meal.id?'Gericht bearbeiten':'Neues Gericht';
-      content = `<div class="grid">${this.formField('name','Name des Gerichts',meal.name || '',{maxlength:120,required:true,placeholder:'z. B. Gemüse-Lasagne'})}${this.typeField('meal-type',meal.meat)}${this.eaterFields('meal-eater','eater',meal.eaters || [])}<small class="hint full">Die Vorlieben helfen bei passenden Vorschlägen. Maximilian isst vegetarisch.</small></div>`;
+      title = modal.fromFree?'Freies Gericht speichern':meal.id?'Gericht bearbeiten':'Neues Gericht';
+      content = `<div class="grid">${this.formField('name','Name des Gerichts',meal.name || '',{maxlength:120,required:true,placeholder:'z. B. Gemüse-Lasagne'})}${this.typeField('meal-type',meal.meat,Boolean(modal.fromFree))}${this.eaterFields('meal-eater','eater',meal.eaters || [])}<small class="hint full">Die Vorlieben helfen bei passenden Vorschlägen. Maximilian isst vegetarisch.</small></div>`;
       actions = cancel + button({label:'Speichern',icon:'save',action:'save-meal',variant:'primary'});
     } else {
       const free = modal.kind !== 'saved';
@@ -266,6 +275,12 @@ class EssensplanerCard extends HTMLElement {
       return;
     }
     if (action === 'open-day') { this.openDay(data.date); return; }
+    if (action === 'save-free-meal') {
+      const entry = this.entryFor(data.date);
+      if (!this.canSaveFreeMeal(entry)) return;
+      this._modal = {type:'meal',fromFree:true,meal:{id:this.newMealId(),name:entry.title,eaters:[]}};
+      this.render(); this.shadowRoot.querySelector('#meal-type')?.focus(); return;
+    }
     if (action === 'suggest' || action === 'another') {
       const selected = this._randomPeople || [];
       if (!selected.length) { this.notify('Bitte mindestens eine mitessende Person auswählen.', true); return; }
@@ -322,9 +337,11 @@ class EssensplanerCard extends HTMLElement {
 
   async saveMeal() {
     const name = this.shadowRoot.querySelector('[data-field="name"]')?.value.trim() || '';
-    const meat = this.shadowRoot.querySelector('#meal-type')?.value === 'meat';
+    const mealType = this.shadowRoot.querySelector('#meal-type')?.value;
+    const meat = mealType === 'meat';
     const eaters = [...this.shadowRoot.querySelectorAll('[data-eater][aria-checked="true"]')].map((e) => e.dataset.eater);
     if (!name) { this.notify('Bitte einen Namen für das Gericht eingeben.', true); return; }
+    if (this._modal.fromFree && !['meat','veg'].includes(mealType)) { this.notify('Bitte auswählen, ob das Gericht Fleisch enthält oder vegetarisch ist.', true); return; }
     if (!eaters.length) { this.notify('Bitte mindestens eine Person auswählen, die das Gericht gern isst.', true); return; }
     if (meat && eaters.includes('Maximilian')) { this.notify('Maximilian isst vegetarisch. Bitte entferne ihn bei einem Fleischgericht.', true); return; }
     try { await this.call('save_meal', { ...(this._modal.meal?.id ? { id: this._modal.meal.id } : {}), name, meat, eaters }); this._modal = null; this._notice = 'Gericht gespeichert.'; this._noticeError = false; this.render(); }
@@ -349,7 +366,7 @@ class EssensplanerCard extends HTMLElement {
         const eaters = [...this.shadowRoot.querySelectorAll('[data-new-eater][aria-checked="true"]')].map((e) => e.dataset.newEater);
         if (!eaters.length) { this.notify('Bitte auswählen, wer das Gericht gern isst.', true); return; }
         if (meat && eaters.includes('Maximilian')) { this.notify('Maximilian isst vegetarisch. Bitte entferne ihn bei einem Fleischgericht.', true); return; }
-        try { const id = `meal-${crypto.randomUUID()}`; await this.call('save_meal', { id, name: text, meat, eaters }); payload.meal_id = id; }
+        try { const id = modal.catalogMealId ||= this.newMealId(); await this.call('save_meal', { id, name: text, meat, eaters }); payload.meal_id = id; }
         catch (error) { this.notify(error.message || 'Gericht konnte nicht gespeichert werden.', true); return; }
       } else payload.text = text;
     }

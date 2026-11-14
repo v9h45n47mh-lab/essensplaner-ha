@@ -13,8 +13,8 @@ w.HTMLDialogElement.prototype.close=function(){if(!this.open)return;this.open=fa
 w.HTMLElement.prototype.scrollIntoView=function(){};
 w.eval(readFileSync(root+'/essensplaner-card.js','utf8').replace(/^import .*;\n/,`const {${exportNames}}=window.TestKit;\n`));
 const people=['Vera','Manuel','Maximilian','Paul'],cards=[],calls=[];
-let entries={},meals=Array.from({length:8},(_,i)=>({id:'m'+i,name:`Reis & Gemüse ${i}`,meat:false,eaters:[...people]})),reject=false;
-function publish(){for(const {card,name}of cards){const state={entity_id:'sensor.familienessen',attributes:{integration_version:'1.4.1',week_start:card.mondayOf(card.dateKey(new Date())),days:[],entries:JSON.parse(JSON.stringify(entries)),meals:JSON.parse(JSON.stringify(meals))}};card.hass={user:{id:name,name,is_admin:false},states:{[state.entity_id]:state},callService:async(domain,service,data)=>{if(reject){reject=false;throw Error('Speichern abgelehnt')};calls.push({domain,service,data});if(service==='plan_day'){if(data.clear)delete entries[data.date];else entries[data.date]={title:meals.find(m=>m.id===data.meal_id)?.name||data.text,meal_id:data.meal_id,planned_by:name,planned_by_user_id:name};}if(service==='save_meal'){const m={id:data.id||'new',name:data.name,meat:data.meat,eaters:data.eaters};meals.push(m)}publish();}};}}
+let entries={},meals=Array.from({length:8},(_,i)=>({id:'m'+i,name:`Reis & Gemüse ${i}`,meat:false,eaters:[...people]})),reject=false,rejectPlan=false;
+function publish(){for(const {card,name}of cards){const state={entity_id:'sensor.familienessen',attributes:{integration_version:'1.4.2',week_start:card.mondayOf(card.dateKey(new Date())),days:[],entries:JSON.parse(JSON.stringify(entries)),meals:JSON.parse(JSON.stringify(meals))}};card.hass={user:{id:name,name,is_admin:false},states:{[state.entity_id]:state},callService:async(domain,service,data)=>{if(reject||(service==='plan_day'&&rejectPlan)){reject=false;rejectPlan=false;throw Error('Speichern abgelehnt')};calls.push({domain,service,data});if(service==='plan_day'){if(data.clear)delete entries[data.date];else entries[data.date]={title:meals.find(m=>m.id===data.meal_id)?.name||data.text,meal_id:data.meal_id,planned_by:name,planned_by_user_id:name};}if(service==='save_meal'){const m={id:data.id||'new',name:data.name,meat:data.meat,eaters:data.eaters};const index=meals.findIndex(item=>item.id===m.id);if(index<0)meals.push(m);else meals[index]=m;}publish();}};}}
 function create(name){const card=w.document.createElement('essensplaner-card');card.setConfig({});w.document.body.append(card);cards.push({card,name});publish();return card}
 const q=(c,s)=>c.shadowRoot.querySelector(s),click=(c,s)=>{const el=q(c,s);assert(el,s);el.click()},input=(c,s,value)=>{const el=q(c,s);el.value=value;el.dispatchEvent(new w.Event('input',{bubbles:true}))};
 const tick=()=>new Promise(r=>setImmediate(r));
@@ -49,4 +49,28 @@ const tick=()=>new Promise(r=>setImmediate(r));
  let downloaded;w.Blob=Blob;w.URL.createObjectURL=blob=>{downloaded=blob;return'blob:test'};w.URL.revokeObjectURL=()=>{};w.HTMLAnchorElement.prototype.click=function(){};manuel.exportMeals();const exported=JSON.parse(await downloaded.text());assert.equal(exported.meals.length,8);assert.deepEqual(exported.people,people);
  const before=calls.length;manuel.remove();w.document.body.append(manuel);click(manuel,'[data-page="random"]');click(manuel,'[data-action="random-person"][data-person="Paul"]');assert.equal(manuel._randomPeople.includes('Paul'),false);assert.equal(calls.length,before);
  console.log('PASS collapse persistence, export payload and reconnect without duplicate listeners');
+ Object.defineProperty(w.crypto,'randomUUID',{value:undefined,configurable:true});
+ await manuel.action('view',{view:'week'});
+ entries[date]={title:'Hackbällchen mit Reis',planned_by:'Paul',planned_by_user_id:'Paul',link:'https://example.test/rezept'};publish();
+ const original=JSON.stringify(entries[date]),beforeCatalog=calls.length;
+ click(manuel,`[data-action="save-free-meal"][data-date="${date}"]`);
+ assert.equal(q(manuel,'[data-field="name"]').value,'Hackbällchen mit Reis');assert.equal(q(manuel,'#meal-type').value,'');
+ await manuel.saveMeal();assert.equal(calls.length,beforeCatalog);assert(q(manuel,'[role="alert"]').textContent.includes('Fleisch'));
+ q(manuel,'#meal-type').value='meat';await manuel.saveMeal();assert.equal(calls.length,beforeCatalog);
+ click(manuel,'[data-eater="Maximilian"]');await manuel.saveMeal();assert.equal(calls.length,beforeCatalog);assert(q(manuel,'[role="alert"]').textContent.includes('vegetarisch'));
+ click(manuel,'[data-eater="Maximilian"]');click(manuel,'[data-eater="Manuel"]');click(manuel,'[data-eater="Paul"]');
+ const stableId=manuel._modal.meal.id;assert.match(stableId,/^meal-[a-f0-9]{32}$/);
+ reject=true;await manuel.saveMeal();assert.equal(manuel._modal.meal.id,stableId);assert.equal(q(manuel,'#meal-type').value,'meat');assert.equal(q(manuel,'[data-eater="Paul"]').getAttribute('aria-checked'),'true');
+ await manuel.saveMeal();await tick();assert.equal(JSON.stringify(entries[date]),original);assert.equal(calls.at(-1).service,'save_meal');assert.equal(calls.at(-1).data.meat,true);assert.deepEqual([...calls.at(-1).data.eaters],['Manuel','Paul']);assert.equal(calls.length,beforeCatalog+1);
+ assert.equal(q(manuel,`[data-action="save-free-meal"][data-date="${date}"]`),null);
+ assert.equal(manuel.canSaveFreeMeal({title:'  HACKBÄLLCHEN   mit\tReis  '}),false);
+ entries[date]={title:'Nur ein freier Eintrag',planned_by:'Paul',planned_by_user_id:'Paul'};publish();await paul.action('view',{view:'week'});
+ assert.equal(q(paul,'[data-action="save-free-meal"]'),null);await paul.action('save-free-meal',{date});assert.equal(paul._modal,null);
+ console.log('PASS free-entry catalog dialog requires type and people, preserves calendar/ownership, retries and manager permissions');
+ const another=new Date(base+'T12:00:00');another.setDate(another.getDate()+3);const catalogDate=manuel.dateKey(another);
+ manuel.openDay(catalogDate);click(manuel,'[data-action="plan-kind"][data-value="free"]');input(manuel,'[data-field="text"]','Gemüseauflauf');click(manuel,'[data-action="save-to-catalog"]');
+ const count=meals.length;rejectPlan=true;await manuel.saveDay();assert.equal(meals.length,count+1);const retryId=manuel._modal.catalogMealId;assert.match(retryId,/^meal-[a-f0-9]{32}$/);
+ await manuel.saveDay();await tick();assert.equal(meals.length,count+1);assert.equal(entries[catalogDate].meal_id,retryId);
+ console.log('PASS inline catalog save works without randomUUID and reuses its ID after a failed calendar save');
+
 })().catch(e=>{console.error(e);process.exitCode=1}).finally(()=>w.close());

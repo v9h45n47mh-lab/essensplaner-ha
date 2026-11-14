@@ -17,13 +17,21 @@ In einem normalen Lovelace-Dashboard: **Dashboard bearbeiten → Karte hinzufüg
 type: custom:essensplaner-card
 ```
 
-Wenn Lovelace-Ressourcen in `configuration.yaml` im YAML-Modus verwaltet werden, muss zusätzlich `/essensplaner/essensplaner-card.js?v=1.4.1` als JavaScript-Modul eingetragen werden.
+Wenn Lovelace-Ressourcen in `configuration.yaml` im YAML-Modus verwaltet werden, muss zusätzlich `/essensplaner/essensplaner-card.js?v=1.4.2` als JavaScript-Modul eingetragen werden.
 
 ## Access Control
 
 Den Wochenplan-Sensor (standardmäßig `sensor.essensplaner_wochenplan`) für die Benutzer zum **Lesen und Bedienen** freigeben, direkt oder über sein Label. Seit Version 1.1.1 nennen alle Aktionen der Karte diesen Sensor als Ziel. Eine Freigabe der Service-Domain `essensplaner` ist damit für die Karte nicht erforderlich. Die Integration prüft, dass das Ziel tatsächlich ihr eigener Wochenplan-Sensor ist. Bestehende Einträge und Gerichte dürfen nur die konfigurierten Verwalter oder HA-Administratoren ändern. Eigene Kalendereinträge darf zusätzlich ihr Eintragender löschen.
 
 Nach einem Update Home Assistant neu starten und die App beziehungsweise das Dashboard neu laden. Die automatisch registrierte Karten-Ressource erhält eine neue Versionsadresse.
+
+## Änderungen in 1.4.2
+
+Freie Kalendereinträge können über das Speichersymbol **„Als Gericht speichern“** in den Gerichtskatalog übernommen werden. Der Name ist vorbelegt; Fleisch/vegetarisch und mindestens eine Person müssen ausgewählt werden. Der Kalendereintrag samt Link und ursprünglichem Eintragenden bleibt erhalten. Bereits vorhandene Gerichte werden anhand ihres Namens erkannt. Die Aktion steht wie die Gerichteverwaltung Vera, Manuel und HA-Administratoren zur Verfügung.
+
+Beim neuen freien Eintrag bleibt **„Auch in Gerichte speichern“** verfügbar. Die Erstellung einer Gerichte-ID funktioniert auch beim lokalen HTTP-Zugriff ohne `crypto.randomUUID`. Ein erneuter Versuch nach einem fehlgeschlagenen Einplanen verwendet dieselbe ID und erzeugt kein zweites Gericht.
+
+Nach dem Update Home Assistant neu starten und die App neu laden.
 
 ## Änderungen in 1.4.1
 
