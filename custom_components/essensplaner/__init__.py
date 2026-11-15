@@ -131,6 +131,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await update()
     async def show_week(call: ServiceCall):
         await async_validate_target(hass, entry, call)
+        if not await can_manage(call, "view"): raise HomeAssistantError("Der Essensplan ist für deine Rolle nicht freigegeben.")
         hass.data[DOMAIN][entry.entry_id]["week"] = call.data.get("date", date.today())
         await update()
     async def plan_day(call: ServiceCall):

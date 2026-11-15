@@ -146,7 +146,7 @@ class EssensplanerCard extends HTMLElement {
     return block({id:'history',title:'Historie',content:content || notice('Noch keine vergangenen Essenseinträge vorhanden.')});
   }
   async call(service, data = {}) {
-    if(this._familyAccess&&!this.can('view')){this.shadowRoot.querySelector('[data-shell]').innerHTML=notice('Der Essensplaner ist für deine Rolle nicht freigegeben.',{error:true});return;}
+    if(this._familyAccess&&!this.can('view'))throw new Error('Der Essensplaner ist für deine Rolle nicht freigegeben.');
     const state = this.getState();
     const entityId = state?.entity_id || Object.entries(this._hass?.states || {}).find(([, value]) => value === state)?.[0];
     if (!entityId) throw new Error('Der Wochenplan-Sensor ist nicht verfügbar. Bitte in Access Control zum Lesen und Bedienen freigeben.');
@@ -198,6 +198,7 @@ class EssensplanerCard extends HTMLElement {
   render() {
     if (!this.shadowRoot || !this._hass) return;
     this.ensureUI();
+    if(this._familyAccess&&!this.can('view')){this.shadowRoot.querySelector('[data-shell]').innerHTML=notice('Der Essensplaner ist für deine Rolle nicht freigegeben.',{error:true});this.shadowRoot.querySelector('[data-dialog-host]').replaceChildren();this._modal=null;return;}
     const oldDialog = this.shadowRoot.querySelector('dialog');
     const closing = Boolean(oldDialog && !this._modal);
     if (closing) oldDialog.close();
