@@ -20,7 +20,7 @@ window.addEventListener('resize',scheduleStyleCheck);
 new MutationObserver(scheduleStyleCheck).observe(document.documentElement,{attributes:true});
 function publish(){
  const actor=document.querySelector('#actor').value;
- const state={entity_id:'sensor.essensplaner_wochenplan',attributes:{integration_version:'1.6.0',week_start:date(0),week_end:date(6),days:Array.from({length:7},(_,i)=>({date:date(i),entry:entries[date(i)]||null})),entries:structuredClone(entries),meals:structuredClone(meals)}};
+ const state={entity_id:'sensor.essensplaner_wochenplan',attributes:{integration_version:'1.6.1',week_start:date(0),week_end:date(6),days:Array.from({length:7},(_,i)=>({date:date(i),entry:entries[date(i)]||null})),entries:structuredClone(entries),meals:structuredClone(meals)}};
  card.hass={user:{id:actor,name:actor,is_admin:false},states:{[state.entity_id]:state},callWS:async msg=>({permissions:{view:true,plan:true,edit_others:['Manuel','Vera'].includes(actor),delete_others:['Manuel','Vera'].includes(actor),manage_catalog:['Manuel','Vera'].includes(actor)}}),callService:async(domain,service,data)=>{
   await new Promise(resolve=>setTimeout(resolve,120));
   if(failNext){failNext=false;throw new Error('Test: Speichern abgelehnt');}

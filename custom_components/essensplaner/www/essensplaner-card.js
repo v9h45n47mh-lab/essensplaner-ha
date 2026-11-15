@@ -13,7 +13,7 @@ function observeFamilyAccess(host, application, changed) {
 function releaseFamilyAccess(host){host._familyAccessUnsub?.();host._familyAccessUnsub=null;host._familyAccessWatching=false;host._familyAccessEpoch=(host._familyAccessEpoch||0)+1;}
 
 
-const ESSENSPLANER_VERSION = '1.6.0';
+const ESSENSPLANER_VERSION = '1.6.1';
 
 class EssensplanerCard extends HTMLElement {
   setConfig(config) {
@@ -272,7 +272,7 @@ class EssensplanerCard extends HTMLElement {
       title = modal.entry?.title?'Eintrag bearbeiten':'Essen einplanen';
       const choices = `<div class="full"><p class="hint">Für ${this.esc(new Date(modal.date+'T12:00:00').toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long'}))}</p><div class="toolbar" role="group" aria-label="Art des Eintrags">${filterButton({label:'Frei eintragen',action:'plan-kind',selected:free,data:{value:'free'}})}${filterButton({label:'Aus Gerichten auswählen',action:'plan-kind',selected:!free,data:{value:'saved'}})}</div></div>`;
       const link = this.formField('link','Link (optional)',modal.link || '',{type:'url',placeholder:'https://…'});
-      content = `<div class="grid">${choices}${free?this.formField('text','Mahlzeit',modal.freeText || '',{maxlength:240,required:true,placeholder:'Essen eintragen'})+link+`<div class="full">${toggle({label:'Auch in Gerichte speichern',action:'save-to-catalog',checked:modal.saveToCatalog,data:{field:'save-to-catalog'}})}</div><div class="grid full" data-catalog-extra ${modal.saveToCatalog?'':'hidden'}>${this.typeField('new-meal-type',modal.newMeat)}${this.eaterFields('new-eater','new-eater',modal.newEaters || ['Vera','Manuel','Paul'])}</div>`:this.renderMealPicker()+link}</div>`;
+      content = `<div class="grid">${choices}${free?this.formField('text','Mahlzeit',modal.freeText || '',{maxlength:240,required:true,placeholder:'Essen eintragen'})+link+(this.isManager()?`<div class="full">${toggle({label:'Auch in Gerichte speichern',action:'save-to-catalog',checked:modal.saveToCatalog,data:{field:'save-to-catalog'}})}</div><div class="grid full" data-catalog-extra ${modal.saveToCatalog?'':'hidden'}>${this.typeField('new-meal-type',modal.newMeat)}${this.eaterFields('new-eater','new-eater',modal.newEaters || ['Vera','Manuel','Paul'])}</div>`:''):this.renderMealPicker()+link}</div>`;
       actions = cancel + button({label:'Einplanen',icon:'save',action:'save-day',variant:'primary'});
     }
     return dialog({id:'planner-dialog',title,content:feedback+content,actions});
@@ -317,6 +317,7 @@ class EssensplanerCard extends HTMLElement {
     if (this._modal.kind === 'free') this.shadowRoot.querySelector('[data-field="text"]')?.focus();
   }
   async action(action, data) {
+    if(['new-meal','edit-meal','confirm-delete-meal','save-to-catalog'].includes(action)&&!this.isManager())return;
     if (action === 'view') { if (data.view === 'settings' && !this.isManager()) return; this._view = data.view; this._modal = null; this._notice = ''; this.render(); return; }
     if (action === 'today') {
       this.render();
@@ -365,7 +366,7 @@ class EssensplanerCard extends HTMLElement {
       if (this.shadowRoot.querySelector('[data-new-eater]')) this._modal.newEaters = [...this.shadowRoot.querySelectorAll('[data-new-eater][aria-checked="true"]')].map((e) => e.dataset.newEater);
       this._modal.kind = data.value; this.render(); return;
     }
-    if (action === 'save-meal') { await this.saveMeal(); return; }
+    if (action === 'save-meal') { if(!this.isManager())return;await this.saveMeal(); return; }
     if (action === 'export-meals') { this.exportMeals(); return; }
     if (action === 'save-day') { await this.saveDay(); return; }
     if (action === 'delete-confirmed') { await this.deleteConfirmed(); return; }
@@ -386,6 +387,7 @@ class EssensplanerCard extends HTMLElement {
   }
 
   async saveMeal() {
+    if(!this.isManager()){this.notify('Gerichte verwalten ist für deine Rolle nicht freigegeben.',true);return;}
     const name = this.shadowRoot.querySelector('[data-field="name"]')?.value.trim() || '';
     const mealType = this.shadowRoot.querySelector('#meal-type')?.value;
     const meat = mealType === 'meat';
@@ -401,7 +403,7 @@ class EssensplanerCard extends HTMLElement {
   async saveDay() {
     if (this.isPastDate(this._modal?.date)) { this.notify('Vergangene Kalendereinträge sind schreibgeschützt.', true); return; }
     const modal = this._modal; const state = this.getState()?.attributes || {}; const link = this.shadowRoot.querySelector('[data-field="link"]')?.value.trim() || '';
-    const saveToCatalog = (this.shadowRoot.querySelector('[data-field="save-to-catalog"]')?.getAttribute('aria-checked') === 'true') || false;
+    const saveToCatalog = this.isManager() && (this.shadowRoot.querySelector('[data-field="save-to-catalog"]')?.getAttribute('aria-checked') === 'true') || false;
     const kind = modal.kind;
     const payload = { date: modal.date };
     if (kind === 'saved') {

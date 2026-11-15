@@ -1,5 +1,7 @@
 # Essensplaner für Home Assistant
 
+**Freie Mahlzeit einplanen:** „Auch in Gerichte speichern“ erscheint nur mit Gerichtskatalog-Verwaltungsrecht. Ohne dieses Recht bleibt die Planung freier Mahlzeiten verfügbar.
+
 Eine lokale Essensplaner-Integration mit einer laufenden Zehntagesansicht ab heute, Freitext, gespeicherten Gerichten, Links, Mitesser-Auswahl und Zufallsrezepten.
 
 ## Installation

@@ -55,6 +55,21 @@ const server=http.createServer((req,res)=>{
   assert.equal(await card.locator('[data-ui-calendar-day]').count(),10);
   await page.screenshot({path:path.join(root,'test-results/ten-days-375-dark.png')});
   await iframe.getByLabel('Testkonto').selectOption('Paul');assert.equal(await card.getByRole('button',{name:'Einstellungen',exact:true}).count(),0);
+  await card.getByRole('button',{name:'Essen einplanen',exact:true}).first().click();
+  await card.getByRole('button',{name:'Frei eintragen',exact:true}).click();
+  await card.getByRole('textbox',{name:'Mahlzeit',exact:true}).fill('Freie Mahlzeit ohne Katalogrecht');
+  assert.equal(await card.getByRole('switch',{name:'Auch in Gerichte speichern',exact:true}).count(),0);
+  assert.equal(await card.locator('[data-catalog-extra],#new-meal-type').count(),0);
+  for(const width of [1100,390])for(const dark of [false,true]){
+    await page.getByLabel('Ansicht').selectOption(String(width));
+    const contentFrame=page.frames().find(f=>new URL(f.url()).pathname.endsWith('/tests/frame.html'));
+    await contentFrame.waitForFunction(value=>innerWidth===value,width);
+    await contentFrame.evaluate(dark=>{if((document.documentElement.dataset.dark==='true')!==dark)document.querySelector('#theme').click();},dark);
+    assert.equal(await card.locator('dialog').evaluate(el=>el.scrollWidth>el.clientWidth),false);
+    await card.locator('dialog').screenshot({path:path.join(root,'test-results/free-without-catalog-'+width+'-'+(dark?'dark':'light')+'.png')});
+  }
+  await card.getByRole('button',{name:'Einplanen',exact:true}).click();await card.locator('dialog').waitFor({state:'detached'});
+  assert.equal(JSON.parse(await iframe.locator('#calls').textContent()).service,'plan_day');
   assert.deepEqual(errors,[]);console.log('PASS ten days, collapsible monthly history, desktop/mobile, themes, dialogs, saved-meal search and settings visibility');
  }finally{await browser?.close();server.close();}
 })().catch(e=>{console.error(e);server.close();process.exitCode=1});

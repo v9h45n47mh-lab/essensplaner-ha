@@ -14,7 +14,7 @@ w.HTMLElement.prototype.scrollIntoView=function(){};
 w.eval(readFileSync(root+'/essensplaner-card.js','utf8').replace(/^import .*;\n/,`const {${exportNames}}=window.TestKit;\n`));
 const people=['Vera','Manuel','Maximilian','Paul'],cards=[],calls=[];
 let entries={},meals=Array.from({length:8},(_,i)=>({id:'m'+i,name:`Reis & Gemüse ${i}`,meat:false,eaters:[...people]})),reject=false,rejectPlan=false;
-function publish(){for(const {card,name}of cards){const state={entity_id:'sensor.familienessen',attributes:{integration_version:'1.6.0',week_start:card.dateKey(new Date()),days:[],entries:JSON.parse(JSON.stringify(entries)),meals:JSON.parse(JSON.stringify(meals))}};card.hass={user:{id:name,name,is_admin:false},states:{[state.entity_id]:state},callWS:async msg=>({permissions:{view:true,plan:true,edit_others:['Manuel','Vera'].includes(name),delete_others:['Manuel','Vera'].includes(name),manage_catalog:['Manuel','Vera'].includes(name)}}),callService:async(domain,service,data)=>{if(reject||(service==='plan_day'&&rejectPlan)){reject=false;rejectPlan=false;throw Error('Speichern abgelehnt')};calls.push({domain,service,data});if(service==='plan_day'){if(data.clear)delete entries[data.date];else entries[data.date]={title:meals.find(m=>m.id===data.meal_id)?.name||data.text,meal_id:data.meal_id,planned_by:name,planned_by_user_id:name};}if(service==='save_meal'){const m={id:data.id||'new',name:data.name,meat:data.meat,eaters:data.eaters};const index=meals.findIndex(item=>item.id===m.id);if(index<0)meals.push(m);else meals[index]=m;}publish();}};}}
+function publish(){for(const {card,name}of cards){const state={entity_id:'sensor.familienessen',attributes:{integration_version:'1.6.1',week_start:card.dateKey(new Date()),days:[],entries:JSON.parse(JSON.stringify(entries)),meals:JSON.parse(JSON.stringify(meals))}};card.hass={user:{id:name,name,is_admin:false},states:{[state.entity_id]:state},callWS:async msg=>({permissions:{view:true,plan:true,edit_others:['Manuel','Vera'].includes(name),delete_others:['Manuel','Vera'].includes(name),manage_catalog:['Manuel','Vera'].includes(name)}}),callService:async(domain,service,data)=>{if(reject||(service==='plan_day'&&rejectPlan)){reject=false;rejectPlan=false;throw Error('Speichern abgelehnt')};calls.push({domain,service,data});if(service==='plan_day'){if(data.clear)delete entries[data.date];else entries[data.date]={title:meals.find(m=>m.id===data.meal_id)?.name||data.text,meal_id:data.meal_id,planned_by:name,planned_by_user_id:name};}if(service==='save_meal'){const m={id:data.id||'new',name:data.name,meat:data.meat,eaters:data.eaters};const index=meals.findIndex(item=>item.id===m.id);if(index<0)meals.push(m);else meals[index]=m;}publish();}};}}
 function create(name){const card=w.document.createElement('essensplaner-card');card.setConfig({});w.document.body.append(card);cards.push({card,name});publish();return card}
 const q=(c,s)=>c.shadowRoot.querySelector(s),click=(c,s)=>{const el=q(c,s);assert(el,s);el.click()},input=(c,s,value)=>{const el=q(c,s);el.value=value;el.dispatchEvent(new w.Event('input',{bubbles:true}))};
 const tick=()=>new Promise(r=>setImmediate(r));
@@ -69,6 +69,19 @@ const tick=()=>new Promise(r=>setImmediate(r));
  entries[date]={title:'Nur ein freier Eintrag',planned_by:'Paul',planned_by_user_id:'Paul'};publish();await paul.action('view',{view:'week'});
  assert.equal(q(paul,'[data-action="save-free-meal"]'),null);await paul.action('save-free-meal',{date});assert.equal(paul._modal,null);
  console.log('PASS free-entry catalog dialog requires type and people, preserves calendar/ownership, retries and manager permissions');
+ const noCatalogDate=new Date(base+'T12:00:00');noCatalogDate.setDate(noCatalogDate.getDate()+8);
+ paul._modal={type:'day',date:paul.dateKey(noCatalogDate),kind:'free',freeText:'Rollen-Test',saveToCatalog:true};paul.render();
+ assert.equal(q(paul,'[data-action="save-to-catalog"],[data-catalog-extra],#new-meal-type'),null);
+ const beforeFree=calls.length;await paul.saveDay();await tick();
+ assert.equal(calls.length,beforeFree+1);assert.equal(calls.at(-1).service,'plan_day');assert.equal(calls.at(-1).data.text,'Rollen-Test');
+ // Revocation after a manager prepared a catalog save still allows an ordinary free plan.
+ manuel._modal={type:'day',date:manuel.dateKey(noCatalogDate),kind:'free',freeText:'Entwurf bleibt',saveToCatalog:true};manuel.render();
+ manuel._familyAccess={view:true,plan:true,manage_catalog:false};manuel.render();
+ assert.equal(q(manuel,'[data-action="save-to-catalog"],[data-catalog-extra]'),null);
+ const beforeRevoke=calls.length;await manuel.saveDay();await tick();assert.equal(calls.length,beforeRevoke+1);assert.equal(calls.at(-1).service,'plan_day');
+ manuel._familyAccess.manage_catalog=true;manuel.render();
+ console.log('PASS free planning without catalog controls or catalog writes, including live revocation');
+
  const another=new Date(base+'T12:00:00');another.setDate(another.getDate()+3);const catalogDate=manuel.dateKey(another);
  manuel.openDay(catalogDate);click(manuel,'[data-action="plan-kind"][data-value="free"]');input(manuel,'[data-field="text"]','Gemüseauflauf');click(manuel,'[data-action="save-to-catalog"]');
  const count=meals.length;rejectPlan=true;await manuel.saveDay();assert.equal(meals.length,count+1);const retryId=manuel._modal.catalogMealId;assert.match(retryId,/^meal-[a-f0-9]{32}$/);
