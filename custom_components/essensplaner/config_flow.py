@@ -26,9 +26,9 @@ class EssensplanerOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input=None):
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            return self.async_create_entry(title="", data=dict(self.config_entry.options))
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema({vol.Optional("manager_names", default=self.config_entry.options.get("manager_names", "Vera, Manuel")): str}),
-            description_placeholders={"hint": "Kontonamen, die bestehende Einträge bearbeiten oder löschen dürfen. HA-Administratoren dürfen immer alles."},
+            data_schema=vol.Schema({}),
+            description_placeholders={"hint": "Die Anwendungsrechte werden je Rolle in Family Access → Essensplaner verwaltet."},
         )

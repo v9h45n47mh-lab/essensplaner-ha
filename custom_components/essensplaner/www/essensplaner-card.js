@@ -1,6 +1,19 @@
 import {UI_CSS, UI_VERSION, navigation, section, row, button, iconButton, toggle, filterButton, field, selectField, dialog, notice, versionInfo, bindUI, escapeHtml, combobox, weekCalendar, confirmDialog, downloadJSON, bindGestures} from './family-ui/1.6.0/family-ui.js';
+function observeFamilyAccess(host, application, changed) {
+  const hass=host._hass,uid=hass?.user?.id;
+  if(!uid||typeof hass.callWS!=='function')return;
+  if(host._familyAccessUser!==uid){host._familyAccessUnsub?.();host._familyAccessUser=uid;host._familyAccessWatching=false;host._familyAccessEpoch=(host._familyAccessEpoch||0)+1;host._familyAccess=null;}
+  if(host._familyAccessWatching||Date.now()<(host._familyAccessRetry||0))return;
+  host._familyAccessWatching=true;
+  const epoch=host._familyAccessEpoch;
+  const accept=result=>{if(epoch!==host._familyAccessEpoch)return;host._familyAccess=result.permissions||{};changed?.();};
+  const request=hass.connection?.subscribeMessage?hass.connection.subscribeMessage(accept,{type:'family_access/subscribe',application}):hass.callWS({type:'family_access/application_permissions',application}).then(accept);
+  Promise.resolve(request).then(unsub=>{if(typeof unsub==='function'){if(epoch===host._familyAccessEpoch)host._familyAccessUnsub=unsub;else unsub();}}).catch(()=>{if(epoch===host._familyAccessEpoch){host._familyAccess={};host._familyAccessWatching=false;host._familyAccessRetry=Date.now()+10000;changed?.();}});
+}
+function releaseFamilyAccess(host){host._familyAccessUnsub?.();host._familyAccessUnsub=null;host._familyAccessWatching=false;host._familyAccessEpoch=(host._familyAccessEpoch||0)+1;}
 
-const ESSENSPLANER_VERSION = '1.5.1';
+
+const ESSENSPLANER_VERSION = '1.6.0';
 
 class EssensplanerCard extends HTMLElement {
   setConfig(config) {
@@ -26,6 +39,7 @@ class EssensplanerCard extends HTMLElement {
     this.scheduleDayRefresh();
   }
   disconnectedCallback() {
+    releaseFamilyAccess(this);
     this._unbindUI?.(); this._unbindUI = null;
     this._unbindGestures?.(); this._unbindGestures = null;
     clearTimeout(this._dayTimer);
@@ -39,6 +53,7 @@ class EssensplanerCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    observeFamilyAccess(this,"essensplaner",()=>this.render());
     if (!this.isManager() && this._view === 'settings') this._view = 'week';
     if (!this._modal) this.render();
   }
@@ -49,14 +64,12 @@ class EssensplanerCard extends HTMLElement {
     const exact = states['sensor.essensplaner_wochenplan'];
     return valid(exact) ? exact : Object.values(states).find(valid) || null;
   }
-  isManager() {
-    const user = this._hass?.user;
-    const name = String(user?.name || '').toLocaleLowerCase();
-    return Boolean(user?.is_admin || /(^|[^a-z])(vera|manuel)([^a-z]|$)/.test(name));
-  }
+  can(permission){return Boolean(this._hass?.user?.is_admin||this._familyAccess?.[permission]);}
+  isManager() {return this.can('manage_catalog');}
   canDeleteEntry(entry) {
     if (!entry) return false;
-    if (this.isManager()) return true;
+    if (this.can('delete_others')) return true;
+    if(!this.can('plan'))return false;
     const user = this._hass?.user;
     if (!user?.id) return false;
     if (Object.hasOwn(entry, 'planned_by_user_id')) return entry.planned_by_user_id === user.id;
@@ -93,7 +106,7 @@ class EssensplanerCard extends HTMLElement {
       .sort(([a], [b]) => b.localeCompare(a)).map(([date, entry]) => ({date, entry}));
   }
   entryActions(day) {
-    return iconButton({icon:'edit',label:'Eintrag bearbeiten',action:'open-day',data:{date:day.date}})
+    return (this.can('edit_others')?iconButton({icon:'edit',label:'Eintrag bearbeiten',action:'open-day',data:{date:day.date}}):'')
       + (this.canSaveFreeMeal(day.entry) ? iconButton({icon:'save',label:'Als Gericht speichern',action:'save-free-meal',data:{date:day.date}}) : '')
       + (this.canDeleteEntry(day.entry) ? iconButton({icon:'trash',label:'Eintrag löschen',action:'confirm-delete-day',data:{date:day.date},danger:true}) : '');
   }
@@ -133,6 +146,7 @@ class EssensplanerCard extends HTMLElement {
     return block({id:'history',title:'Historie',content:content || notice('Noch keine vergangenen Essenseinträge vorhanden.')});
   }
   async call(service, data = {}) {
+    if(this._familyAccess&&!this.can('view')){this.shadowRoot.querySelector('[data-shell]').innerHTML=notice('Der Essensplaner ist für deine Rolle nicht freigegeben.',{error:true});return;}
     const state = this.getState();
     const entityId = state?.entity_id || Object.entries(this._hass?.states || {}).find(([, value]) => value === state)?.[0];
     if (!entityId) throw new Error('Der Wochenplan-Sensor ist nicht verfügbar. Bitte in Access Control zum Lesen und Bedienen freigeben.');
@@ -307,7 +321,7 @@ class EssensplanerCard extends HTMLElement {
       this.render();
       return;
     }
-    if (action === 'open-day') { this.openDay(data.date); return; }
+    if (action === 'open-day') { if(this.entryFor(data.date)?!this.can('edit_others'):!this.can('plan'))return;this.openDay(data.date); return; }
     if (action === 'save-free-meal') {
       if (this.isPastDate(data.date)) return;
       const entry = this.entryFor(data.date);

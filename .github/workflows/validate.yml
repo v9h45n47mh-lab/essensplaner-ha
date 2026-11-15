@@ -1,0 +1,44 @@
+name: Validate and publish Essensplaner
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python tests/permissions.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run check
+      - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+      - run: python scripts/build_release.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: essensplaner-browser-evidence
+          path: test-results/
+
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[publish-release]')
+    needs: tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: python scripts/build_release.py
+      - name: Publish tested release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(python -c 'import json,pathlib; print(json.loads(next(pathlib.Path("custom_components").glob("*/manifest.json")).read_text())["version"])')
+          gh release create "v$version" --target "$GITHUB_SHA" --latest --title "essensplaner-ha $version" --notes-file RELEASE_NOTES.md dist/*.zip dist/SHA256SUMS.txt
