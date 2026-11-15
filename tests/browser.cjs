@@ -16,6 +16,8 @@ const server=http.createServer((req,res)=>{
   page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(8000);
   await page.goto(`http://127.0.0.1:${server.address().port}/tests/preview.html`);
   const iframe=page.frameLocator('iframe'),card=iframe.locator('essensplaner-card');
+  assert.equal(await card.locator('[data-ui-calendar-day]').count(),10);
+  assert.equal(await card.getByRole('button',{name:'Nächste Woche',exact:true}).count(),0);
   await card.getByRole('button',{name:'Einstellungen',exact:true}).click();
   fs.mkdirSync(path.join(root,'test-results'),{recursive:true});
   for(const width of [1100,430,390,375]){
@@ -33,6 +35,11 @@ const server=http.createServer((req,res)=>{
   await modal.getByLabel('Name des Gerichts',{exact:true}).fill('Browser-Test <sicher>');
   await modal.getByRole('button',{name:'Speichern',exact:true}).click();await modal.waitFor({state:'detached'});
   assert((await card.textContent()).includes('Browser-Test <sicher>'));
+  const months=card.locator('[data-settings^="history-"]');assert.equal(await months.count(),3);
+  const latestMonth=months.first().getByRole('button').first();assert.equal(await latestMonth.getAttribute('aria-expanded'),'false');
+  await latestMonth.click();assert.equal(await latestMonth.getAttribute('aria-expanded'),'true');
+  assert((await months.first().textContent()).includes('Gemüsesuppe von gestern'));
+  await page.screenshot({path:path.join(root,'test-results/history-375-light.png')});
   await card.getByRole('button',{name:'Essensplan',exact:true}).click();
   await card.getByRole('button',{name:'Essen einplanen',exact:true}).first().click();
   const search=card.getByRole('combobox',{name:'Gericht auswählen'});await search.fill('Reis');
@@ -42,8 +49,9 @@ const server=http.createServer((req,res)=>{
   await card.getByRole('button',{name:'Einplanen',exact:true}).click();await card.locator('dialog').waitFor({state:'detached'});
   await iframe.getByRole('button',{name:'Dunkles Theme',exact:true}).click();
   await iframe.getByRole('button',{name:'Layout prüfen',exact:true}).click();assert(!(await iframe.locator('#checks').textContent()).includes('FAIL'));
-  await page.screenshot({path:path.join(root,'test-results/week-375-dark.png')});
+  assert.equal(await card.locator('[data-ui-calendar-day]').count(),10);
+  await page.screenshot({path:path.join(root,'test-results/ten-days-375-dark.png')});
   await iframe.getByLabel('Testkonto').selectOption('Paul');assert.equal(await card.getByRole('button',{name:'Einstellungen',exact:true}).count(),0);
-  assert.deepEqual(errors,[]);console.log('PASS desktop/mobile, themes, dialogs, saved-meal search and settings visibility');
+  assert.deepEqual(errors,[]);console.log('PASS ten days, collapsible monthly history, desktop/mobile, themes, dialogs, saved-meal search and settings visibility');
  }finally{await browser?.close();server.close();}
 })().catch(e=>{console.error(e);server.close();process.exitCode=1});
