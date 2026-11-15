@@ -1,5 +1,5 @@
 // Test-only comparison against independently rendered, unmodified UI Kit components.
-import {UI_CSS,UI_VERSION,navigation,section,row,button,iconButton,toggle,field,selectField,dialog,notice,combobox,dateNavigation,weekCalendar} from '../custom_components/essensplaner/www/family-ui/1.2.1/family-ui.js';
+import {UI_CSS,UI_VERSION,navigation,section,row,button,iconButton,toggle,field,selectField,dialog,notice,combobox,dateNavigation,weekCalendar} from '../custom_components/essensplaner/www/family-ui/1.6.0/family-ui.js';
 let reference;
 const properties=['font-family','font-size','font-weight','line-height','color','background-color','padding-top','padding-right','padding-bottom','padding-left','border-top-width','border-top-style','border-top-color','border-bottom-width','border-bottom-style','border-bottom-color','border-radius','gap','min-width','min-height','fill','stroke','stroke-width'];
 export function compareKitStyles(card){

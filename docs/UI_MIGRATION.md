@@ -1,3 +1,7 @@
+# Aktueller Stand · Essensplaner 1.5.1
+
+HA UI Kit 1.6.0 ist unverändert lokal eingebunden. Navigation, Kalender, Auswahlfelder, Buttons, Listen, Dialoge, Schrift, Farben und Abstände stammen aus dessen gemeinsamen Dateien. Übernahme und aktueller Prüfnachweis: `READ_ONLY_HISTORY.md`. Der folgende Bericht dokumentiert die frühere Migration.
+
 # Essensplaner 1.4.1 – HA UI Kit 1.2.1
 
 ## Feste Einbindung

@@ -1,6 +1,6 @@
-import {UI_CSS, UI_VERSION, navigation, section, row, button, iconButton, toggle, filterButton, field, selectField, dialog, notice, versionInfo, bindUI, escapeHtml, combobox, weekCalendar, confirmDialog, downloadJSON, bindGestures} from './family-ui/1.2.1/family-ui.js';
+import {UI_CSS, UI_VERSION, navigation, section, row, button, iconButton, toggle, filterButton, field, selectField, dialog, notice, versionInfo, bindUI, escapeHtml, combobox, weekCalendar, confirmDialog, downloadJSON, bindGestures} from './family-ui/1.6.0/family-ui.js';
 
-const ESSENSPLANER_VERSION = '1.5.0';
+const ESSENSPLANER_VERSION = '1.5.1';
 
 class EssensplanerCard extends HTMLElement {
   setConfig(config) {
@@ -71,6 +71,7 @@ class EssensplanerCard extends HTMLElement {
     return 'meal-' + Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
   }
   dateKey(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; }
+  isPastDate(date) { return Boolean(date && date < this.dateKey(new Date())); }
   entryFor(date) {
     const attributes = this.getState()?.attributes || {};
     return attributes.entries ? attributes.entries[date] || null : (attributes.days || []).find((day) => day.date === date)?.entry || null;
@@ -96,7 +97,7 @@ class EssensplanerCard extends HTMLElement {
       + (this.canSaveFreeMeal(day.entry) ? iconButton({icon:'save',label:'Als Gericht speichern',action:'save-free-meal',data:{date:day.date}}) : '')
       + (this.canDeleteEntry(day.entry) ? iconButton({icon:'trash',label:'Eintrag löschen',action:'confirm-delete-day',data:{date:day.date},danger:true}) : '');
   }
-  renderCalendar(days, id) {
+  renderCalendar(days, id, {readOnly = false} = {}) {
     if (!days.length) return '';
     const entries = days.filter(day => day.entry).map(day => ({date:day.date,title:day.entry.title,
       description:`Eingetragen von ${day.entry.planned_by}${day.entry.planned_at?' · '+this.time(day.entry.planned_at):''}`,
@@ -108,7 +109,13 @@ class EssensplanerCard extends HTMLElement {
       if (rows.has(day.date)) continue;
       template.innerHTML = weekCalendar({id,start:day.date,entries,today:this.dateKey(new Date()),emptyLabel:'Essen einplanen'});
       calendar ||= template.content.firstElementChild.cloneNode(false);
-      for (const element of template.content.firstElementChild.children) rows.set(element.dataset.uiCalendarDay, element);
+      for (const element of template.content.firstElementChild.children) {
+        if (readOnly) {
+          element.removeAttribute('data-control-action');
+          element.querySelector('.toolbar')?.replaceChildren();
+        }
+        rows.set(element.dataset.uiCalendarDay, element);
+      }
     }
     calendar.replaceChildren(...days.map(day => rows.get(day.date)));
     return calendar.outerHTML;
@@ -122,7 +129,7 @@ class EssensplanerCard extends HTMLElement {
     }
     const content = [...months].map(([month, days]) => block({id:`history-${month}`,
       title:new Date(month + '-01T12:00:00').toLocaleDateString('de-DE', {month:'long',year:'numeric'}),
-      expanded:false,content:this.renderCalendar(days, `history-days-${month}`)})).join('');
+      expanded:false,content:this.renderCalendar(days, `history-days-${month}`, {readOnly:true})})).join('');
     return block({id:'history',title:'Historie',content:content || notice('Noch keine vergangenen Essenseinträge vorhanden.')});
   }
   async call(service, data = {}) {
@@ -190,7 +197,7 @@ class EssensplanerCard extends HTMLElement {
       for (const fold of shell.querySelectorAll('[data-ui="collapse"]')) this._folds[fold.getAttribute('aria-controls')] = fold.getAttribute('aria-expanded') === 'true';
       const block = props => section({...props,expanded:this._folds[props.id+'-content'] ?? props.expanded ?? true});
       const days = this.upcomingDays();
-      const week = days.length ? row({title:'Heute und die nächsten 9 Tage',description:this.rangeLabel(days[0].date,days.at(-1).date)})
+      const week = days.length ? row({title:this.rangeLabel(days[0].date,days.at(-1).date)})
         + this.renderCalendar(days, 'meal-days')
         : notice('Der Wochenplan-Sensor ist nicht geladen. Bitte Integration und Home-Assistant-Protokoll prüfen.',{error:true});
       const mealRows = meals.map(meal => row({title:meal.name,description:`${meal.meat?'Mit Fleisch':'Vegetarisch'} · Isst gern: ${(meal.eaters || []).join(', ') || 'Keine Personen zugeordnet'}`,trailing:iconButton({icon:'edit',label:'Gericht bearbeiten',action:'edit-meal',data:{id:meal.id}})+iconButton({icon:'trash',label:'Gericht löschen',action:'confirm-delete-meal',data:{id:meal.id},danger:true})})).join('');
@@ -285,6 +292,7 @@ class EssensplanerCard extends HTMLElement {
     this._notice = message; this._noticeError = error; this.render();
   }
   openDay(date) {
+    if (this.isPastDate(date)) return;
     const state = this.getState()?.attributes || {};
     const entry = this.entryFor(date) || {};
     const savedMeal = (state.meals || []).find((meal) => meal.id === entry.meal_id);
@@ -301,6 +309,7 @@ class EssensplanerCard extends HTMLElement {
     }
     if (action === 'open-day') { this.openDay(data.date); return; }
     if (action === 'save-free-meal') {
+      if (this.isPastDate(data.date)) return;
       const entry = this.entryFor(data.date);
       if (!this.canSaveFreeMeal(entry)) return;
       this._modal = {type:'meal',fromFree:true,meal:{id:this.newMealId(),name:entry.title,eaters:[]}};
@@ -324,6 +333,7 @@ class EssensplanerCard extends HTMLElement {
     if (action === 'edit-meal') { const meal = (this.getState()?.attributes.meals || []).find((m) => m.id === data.id); if (meal) { this._modal = { type: 'meal', meal: { ...meal, eaters: [...(meal.eaters || [])] } }; this.render(); this.shadowRoot.querySelector('[data-field="name"]')?.focus(); } return; }
     if (action === 'confirm-delete-meal') { const meal = (this.getState()?.attributes.meals || []).find((m) => m.id === data.id); if (meal) { this._modal = { type: 'meal-confirm', meal }; this.render(); } return; }
     if (action === 'confirm-delete-day') {
+      if (this.isPastDate(data.date)) return;
       if (!this.canDeleteEntry(this.entryFor(data.date))) { this.notify('Du darfst nur eigene Einträge löschen.', true); return; }
       this._modal = { type: 'day-confirm', date: data.date }; this.render(); return;
     }
@@ -374,6 +384,7 @@ class EssensplanerCard extends HTMLElement {
   }
 
   async saveDay() {
+    if (this.isPastDate(this._modal?.date)) { this.notify('Vergangene Kalendereinträge sind schreibgeschützt.', true); return; }
     const modal = this._modal; const state = this.getState()?.attributes || {}; const link = this.shadowRoot.querySelector('[data-field="link"]')?.value.trim() || '';
     const saveToCatalog = (this.shadowRoot.querySelector('[data-field="save-to-catalog"]')?.getAttribute('aria-checked') === 'true') || false;
     const kind = modal.kind;
@@ -402,6 +413,7 @@ class EssensplanerCard extends HTMLElement {
 
   async deleteConfirmed() {
     const modal = this._modal;
+    if (modal.type === 'day-confirm' && this.isPastDate(modal.date)) { this.notify('Vergangene Kalendereinträge sind schreibgeschützt.', true); return; }
     try {
       if (modal.type === 'meal-confirm') await this.call('delete_meal', { id: modal.meal.id });
       else await this.call('plan_day', { date: modal.date, clear: true });

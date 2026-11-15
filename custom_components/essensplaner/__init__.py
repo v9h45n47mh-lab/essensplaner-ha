@@ -17,6 +17,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
+from homeassistant.util import dt as dt_util
 from .const import DOMAIN, PEOPLE, STORAGE_KEY, STORAGE_VERSION, VERSION
 
 _LOGGER = logging.getLogger(__name__)
@@ -130,6 +131,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         async with plan_lock:
             await apply_plan_day(call)
     async def apply_plan_day(call: ServiceCall):
+        if call.data["date"] < dt_util.now().date():
+            raise HomeAssistantError("Vergangene Kalendereinträge sind schreibgeschützt.")
         target=call.data["date"].isoformat(); old=data["days"].get(target)
         if call.data.get("clear"):
             if old and not await can_manage(call) and not await async_is_entry_owner(hass, old, call.context.user_id):

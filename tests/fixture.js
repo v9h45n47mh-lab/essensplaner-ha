@@ -1,5 +1,5 @@
 import '../custom_components/essensplaner/www/essensplaner-card.js';
-import {compareKitStyles} from './style-reference.js';
+import {compareKitStyles} from './style-reference.js?v=1.6.0';
 const people=['Vera','Manuel','Maximilian','Paul'];
 const key=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const today=new Date();today.setHours(12,0,0,0);
@@ -20,7 +20,7 @@ window.addEventListener('resize',scheduleStyleCheck);
 new MutationObserver(scheduleStyleCheck).observe(document.documentElement,{attributes:true});
 function publish(){
  const actor=document.querySelector('#actor').value;
- const state={entity_id:'sensor.essensplaner_wochenplan',attributes:{integration_version:'1.5.0',week_start:date(0),week_end:date(6),days:Array.from({length:7},(_,i)=>({date:date(i),entry:entries[date(i)]||null})),entries:structuredClone(entries),meals:structuredClone(meals)}};
+ const state={entity_id:'sensor.essensplaner_wochenplan',attributes:{integration_version:'1.5.1',week_start:date(0),week_end:date(6),days:Array.from({length:7},(_,i)=>({date:date(i),entry:entries[date(i)]||null})),entries:structuredClone(entries),meals:structuredClone(meals)}};
  card.hass={user:{id:actor,name:actor,is_admin:false},states:{[state.entity_id]:state},callService:async(domain,service,data)=>{
   await new Promise(resolve=>setTimeout(resolve,120));
   if(failNext){failNext=false;throw new Error('Test: Speichern abgelehnt');}

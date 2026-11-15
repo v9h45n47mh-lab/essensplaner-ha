@@ -17,13 +17,23 @@ In einem normalen Lovelace-Dashboard: **Dashboard bearbeiten → Karte hinzufüg
 type: custom:essensplaner-card
 ```
 
-Wenn Lovelace-Ressourcen in `configuration.yaml` im YAML-Modus verwaltet werden, muss zusätzlich `/essensplaner/essensplaner-card.js?v=1.5.0` als JavaScript-Modul eingetragen werden.
+Wenn Lovelace-Ressourcen in `configuration.yaml` im YAML-Modus verwaltet werden, muss zusätzlich `/essensplaner/essensplaner-card.js?v=1.5.1` als JavaScript-Modul eingetragen werden.
 
 ## Access Control
 
-Den Wochenplan-Sensor (standardmäßig `sensor.essensplaner_wochenplan`) für die Benutzer zum **Lesen und Bedienen** freigeben, direkt oder über sein Label. Seit Version 1.1.1 nennen alle Aktionen der Karte diesen Sensor als Ziel. Eine Freigabe der Service-Domain `essensplaner` ist damit für die Karte nicht erforderlich. Die Integration prüft, dass das Ziel tatsächlich ihr eigener Wochenplan-Sensor ist. Bestehende Einträge und Gerichte dürfen nur die konfigurierten Verwalter oder HA-Administratoren ändern. Eigene Kalendereinträge darf zusätzlich ihr Eintragender löschen.
+Den Wochenplan-Sensor (standardmäßig `sensor.essensplaner_wochenplan`) für die Benutzer zum **Lesen und Bedienen** freigeben, direkt oder über sein Label. Seit Version 1.1.1 nennen alle Aktionen der Karte diesen Sensor als Ziel. Eine Freigabe der Service-Domain `essensplaner` ist damit für die Karte nicht erforderlich. Die Integration prüft, dass das Ziel tatsächlich ihr eigener Wochenplan-Sensor ist. Bestehende Einträge und Gerichte dürfen nur die konfigurierten Verwalter oder HA-Administratoren ändern. Eigene heutige und zukünftige Kalendereinträge darf zusätzlich ihr Eintragender löschen. Vergangene Tage sind für alle Benutzer schreibgeschützt.
 
 Nach einem Update Home Assistant neu starten und die App beziehungsweise das Dashboard neu laden. Die automatisch registrierte Karten-Ressource erhält eine neue Versionsadresse.
+
+## Änderungen in 1.5.1
+
+Über dem Essensplan steht nur noch der Datumsbereich. Die zehn Tage ab heute rücken weiterhin automatisch weiter.
+
+Die monatlich aufklappbare Historie ist schreibgeschützt: keine Bearbeiten-, Löschen- oder Speichern-Aktionen und kein Editor beim Antippen eines Eintrags. Rezeptlinks bleiben nutzbar. Auch direkte Dienstaufrufe zum Eintragen, Ändern oder Löschen vergangener Tage werden abgewiesen; maßgeblich ist das lokale Datum von Home Assistant. Heutige und zukünftige Einträge behalten die bisherigen Berechtigungen.
+
+HA UI Kit **1.6.0**, der aktuellste veröffentlichte Release, ist fest lokal eingebunden. Gemeinsame Komponenten, Symbole und Stylesheet sind unverändert; lokale CSS-Überschreibungen werden nicht verwendet. Desktop/Mobil sowie helle und dunkle Themes sind gegen die Originalkomponenten geprüft. Details: `docs/READ_ONLY_HISTORY.md`.
+
+Nach dem Update Home Assistant neu starten und App beziehungsweise Dashboard neu laden.
 
 ## Änderungen in 1.5.0
 
@@ -63,9 +73,9 @@ Der lokale HA UI Kit wurde auf **1.1.0** aktualisiert (fester Quellstand `6e57c4
 
 ## Oberfläche seit 1.3.0
 
-Die gesamte Oberfläche verwendet den lokal mitgelieferten **HA UI Kit 1.2.1** aus `v9h45n47mh-lab/ha-ui-kit`: Navigation, Einstellungen, kompakte Zeilen, Symbole, Buttons, Schalter, Eingabefelder, Statusmeldungen, Versionszeile und native modale Dialoge. Farben und Schriften folgen dem Home-Assistant-Theme. Der Gerichtskatalog, die Suche mit sechs sichtbaren Treffern, Zufallsrezepte, Export, unabhängige Kalenderwochen und die bisherigen Berechtigungen bleiben erhalten.
+Die gesamte Oberfläche verwendet den lokal mitgelieferten **HA UI Kit 1.6.0** aus `v9h45n47mh-lab/ha-ui-kit`: Navigation, Einstellungen, kompakte Zeilen, Symbole, Buttons, Schalter, Eingabefelder, Statusmeldungen, Versionszeile und native modale Dialoge. Farben und Schriften folgen dem Home-Assistant-Theme. Der Gerichtskatalog, die Suche mit sechs sichtbaren Treffern, Zufallsrezepte, Export, unabhängige Kalenderwochen und die bisherigen Berechtigungen bleiben erhalten.
 
-Es wird keine zusätzliche Integration benötigt. Gemeinsames Modul, Lizenz und Prüfsummen liegen unter `custom_components/essensplaner/www/family-ui/1.2.1/`; die feste Bindung ist in `www/family-ui.lock.json` dokumentiert. Der bisherige Ressourcenpfad `/essensplaner-card.js` bleibt über einen lokalen Kompatibilitäts-Loader nutzbar.
+Es wird keine zusätzliche Integration benötigt. Gemeinsames Modul, Lizenz und Prüfsummen liegen unter `custom_components/essensplaner/www/family-ui/1.6.0/`; die feste Bindung ist in `www/family-ui.lock.json` dokumentiert. Der bisherige Ressourcenpfad `/essensplaner-card.js` bleibt über einen lokalen Kompatibilitäts-Loader nutzbar.
 
 Nach dem Update Home Assistant neu starten und die App beziehungsweise das Dashboard neu laden.
 
@@ -98,7 +108,7 @@ Die Sensor-Aktualisierung läuft als Home-Assistant-Callback im Event Loop. Ein 
 ## Ansicht und Rechte
 
 - Hauptansicht: heute und die nächsten neun Tage mit Tagesplanung, Link, Bearbeiten/Löschen. Vergangene Tage: Einstellungen → Historie mit aufklappbaren Monatsgruppen.
-- Leere Tage können von jedem angemeldeten HA-Konto belegt werden. Bestehende Einträge und der Gerichtskatalog können nur die konfigurierten Verwalter oder HA-Administratoren ändern. Eigene Kalendereinträge kann der Eintragende löschen.
+- Leere Tage können von jedem angemeldeten HA-Konto belegt werden. Bestehende Einträge und der Gerichtskatalog können nur die konfigurierten Verwalter oder HA-Administratoren ändern. Eigene heutige und zukünftige Kalendereinträge kann der Eintragende löschen. Vergangene Tage sind schreibgeschützt.
 - Gerichte werden direkt in der App hinzugefügt und bearbeitet. Das Formular zeigt Fleisch/vegetarisch sowie die Personen, die das Gericht gern essen.
 - Wochenplanung, Bearbeiten und Löschen erfolgen in App-Dialogen ohne Browser-Pop-ups. Bei freien Mahlzeiten lassen sich Link und optional der Eintrag im Gerichtskatalog hinterlegen.
 

@@ -22,12 +22,12 @@ const server=http.createServer((req,res)=>{
   fs.mkdirSync(path.join(root,'test-results'),{recursive:true});
   for(const width of [1100,430,390,375]){
    await page.getByLabel('Ansicht').selectOption(String(width));
-   const contentFrame=page.frames().find(f=>f.url().endsWith('/tests/frame.html'));
+   const contentFrame=page.frames().find(f=>new URL(f.url()).pathname.endsWith('/tests/frame.html'));
    await contentFrame.waitForFunction(value=>innerWidth===value,width);
    await iframe.getByRole('button',{name:'Layout prüfen',exact:true}).click();
    assert(!((await iframe.locator('#checks').textContent()).includes('FAIL')));
    await contentFrame.waitForFunction(()=>document.querySelector('#style-checks').textContent.startsWith('PASS'));
-   assert((await iframe.locator('#style-checks').textContent()).includes('UI Kit 1.2.1'));
+   assert((await iframe.locator('#style-checks').textContent()).includes('UI Kit 1.6.0'));
    await page.screenshot({path:path.join(root,`test-results/settings-${width}-light.png`)});
   }
   await card.getByRole('button',{name:'Gericht bearbeiten',exact:true}).first().click();
@@ -39,6 +39,8 @@ const server=http.createServer((req,res)=>{
   const latestMonth=months.first().getByRole('button').first();assert.equal(await latestMonth.getAttribute('aria-expanded'),'false');
   await latestMonth.click();assert.equal(await latestMonth.getAttribute('aria-expanded'),'true');
   assert((await months.first().textContent()).includes('Gemüsesuppe von gestern'));
+  assert.equal(await months.locator('.calendar-row button').count(),0);assert.equal(await months.locator('.calendar-row[data-control-action]').count(),0);
+  assert(await months.first().getByRole('link',{name:'Link öffnen'}).isVisible());
   await page.screenshot({path:path.join(root,'test-results/history-375-light.png')});
   await card.getByRole('button',{name:'Essensplan',exact:true}).click();
   await card.getByRole('button',{name:'Essen einplanen',exact:true}).first().click();

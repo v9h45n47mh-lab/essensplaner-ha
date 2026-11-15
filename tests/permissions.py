@@ -28,7 +28,7 @@ async def main():
     async def validate(*args): pass
     ns = {'hass': NS(auth=auth), 'entry': NS(options={}), 'data': data, 'update': update,
           'async_validate_target': validate, 'plan_lock': asyncio.Lock(), 'HomeAssistantError': Rejected,
-          'datetime': datetime, 'urlparse': urlparse}
+          'datetime': datetime, 'urlparse': urlparse, 'dt_util': NS(now=lambda: datetime(2026,11,10,0,1))}
     exec(compile(ast.Module(body=nodes,type_ignores=[]), '<planner handlers>', 'exec'),ns)
     target = '2026-11-10'
     def call(actor, **payload): return NS(context=NS(user_id=actor),data={'date':date.fromisoformat(target),**payload})
@@ -64,6 +64,19 @@ async def main():
     seed('paul');await denied('other-paul',clear=True)
     users.pop('other-paul')
     print('PASS unique legacy names work; ambiguous names and mismatched IDs are rejected')
+
+    target='2026-11-09'
+    for actor in ('manuel','vera','admin','paul','max'):
+        seed(actor)
+        await denied(actor,clear=True)
+        await denied(actor,text='Änderung der Historie')
+    data['days'].clear()
+    await denied('manuel',text='Nachträglicher Eintrag')
+    target='2026-11-11'
+    await ns['plan_day'](call('manuel',text='Morgen geplant'))
+    assert data['days'][target]['title']=='Morgen geplant'
+    target='2026-11-10'
+    print('PASS archive is read-only for owners, managers and administrators; today and future stay writable')
 
     seed('paul')
     manager_started,release_manager=asyncio.Event(),asyncio.Event()

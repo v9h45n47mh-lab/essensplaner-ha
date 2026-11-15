@@ -14,13 +14,14 @@ w.HTMLElement.prototype.scrollIntoView=function(){};
 w.eval(readFileSync(root+'/essensplaner-card.js','utf8').replace(/^import .*;\n/,`const {${exportNames}}=window.TestKit;\n`));
 const people=['Vera','Manuel','Maximilian','Paul'],cards=[],calls=[];
 let entries={},meals=Array.from({length:8},(_,i)=>({id:'m'+i,name:`Reis & Gemüse ${i}`,meat:false,eaters:[...people]})),reject=false,rejectPlan=false;
-function publish(){for(const {card,name}of cards){const state={entity_id:'sensor.familienessen',attributes:{integration_version:'1.5.0',week_start:card.dateKey(new Date()),days:[],entries:JSON.parse(JSON.stringify(entries)),meals:JSON.parse(JSON.stringify(meals))}};card.hass={user:{id:name,name,is_admin:false},states:{[state.entity_id]:state},callService:async(domain,service,data)=>{if(reject||(service==='plan_day'&&rejectPlan)){reject=false;rejectPlan=false;throw Error('Speichern abgelehnt')};calls.push({domain,service,data});if(service==='plan_day'){if(data.clear)delete entries[data.date];else entries[data.date]={title:meals.find(m=>m.id===data.meal_id)?.name||data.text,meal_id:data.meal_id,planned_by:name,planned_by_user_id:name};}if(service==='save_meal'){const m={id:data.id||'new',name:data.name,meat:data.meat,eaters:data.eaters};const index=meals.findIndex(item=>item.id===m.id);if(index<0)meals.push(m);else meals[index]=m;}publish();}};}}
+function publish(){for(const {card,name}of cards){const state={entity_id:'sensor.familienessen',attributes:{integration_version:'1.5.1',week_start:card.dateKey(new Date()),days:[],entries:JSON.parse(JSON.stringify(entries)),meals:JSON.parse(JSON.stringify(meals))}};card.hass={user:{id:name,name,is_admin:false},states:{[state.entity_id]:state},callService:async(domain,service,data)=>{if(reject||(service==='plan_day'&&rejectPlan)){reject=false;rejectPlan=false;throw Error('Speichern abgelehnt')};calls.push({domain,service,data});if(service==='plan_day'){if(data.clear)delete entries[data.date];else entries[data.date]={title:meals.find(m=>m.id===data.meal_id)?.name||data.text,meal_id:data.meal_id,planned_by:name,planned_by_user_id:name};}if(service==='save_meal'){const m={id:data.id||'new',name:data.name,meat:data.meat,eaters:data.eaters};const index=meals.findIndex(item=>item.id===m.id);if(index<0)meals.push(m);else meals[index]=m;}publish();}};}}
 function create(name){const card=w.document.createElement('essensplaner-card');card.setConfig({});w.document.body.append(card);cards.push({card,name});publish();return card}
 const q=(c,s)=>c.shadowRoot.querySelector(s),click=(c,s)=>{const el=q(c,s);assert(el,s);el.click()},input=(c,s,value)=>{const el=q(c,s);el.value=value;el.dispatchEvent(new w.Event('input',{bubbles:true}))};
 const tick=()=>new Promise(r=>setImmediate(r));
 (async()=>{
  const paul=create('Paul'),manuel=create('Manuel'),base=manuel.dateKey(new Date());
  assert.equal(manuel.shadowRoot.querySelectorAll('[data-ui-calendar-day]').length,10);assert.equal(q(manuel,'[data-ui-calendar-day]').dataset.uiCalendarDay,base);
+ assert(!manuel.shadowRoot.textContent.includes('Heute und die nächsten 9 Tage'));assert(manuel.shadowRoot.textContent.includes(manuel.rangeLabel(base,manuel.upcomingDays().at(-1).date)));
  assert.equal(q(paul,'[data-action="next-week"]'),null);assert.equal(q(manuel,'[data-action="previous-week"]'),null);assert.equal(calls.length,0);
  await paul.action('view',{view:'settings'});assert.equal(paul._view,'week');assert.equal(q(paul,'[data-page="settings"]'),null);
  click(paul,'[data-page="random"]');assert.equal(paul.shadowRoot.querySelectorAll('[role="switch"][aria-checked="true"]').length,4);
@@ -86,12 +87,17 @@ const tick=()=>new Promise(r=>setImmediate(r));
  for(const id of monthIds)assert.equal(q(manuel,'#'+id+'-content').hidden,true);
  click(manuel,`[aria-controls="history-${oldDate.slice(0,7)}-content"]`);publish();
  assert.equal(q(manuel,'#history-'+oldDate.slice(0,7)+'-content').hidden,false);
- assert(q(manuel,`[data-action="save-free-meal"][data-date="${oldDate}"]`));assert(q(manuel,`[data-action="confirm-delete-day"][data-date="${oldDate}"]`));
+ assert.equal(q(manuel,'[data-settings="history"] .calendar-row button'),null);
+ assert.equal(q(manuel,'[data-settings="history"] .calendar-row[data-control-action]'),null);
+ assert.equal(q(manuel,`[data-ui-calendar-day="${oldDate}"] a`).href,'https://example.test/alt');
  assert.equal(q(manuel,`[data-ui-calendar-day="${base}"]`),null);
- click(manuel,`[data-action="open-day"][data-date="${oldDate}"]`);assert.equal(manuel._modal.freeText,'Gestern gekocht');await manuel.action('close-modal',{});await tick();
+ q(manuel,`[data-ui-calendar-day="${oldDate}"] strong`).click();assert.equal(manuel._modal,null);
+ await manuel.action('open-day',{date:oldDate});assert.equal(manuel._modal,null);await manuel.action('confirm-delete-day',{date:oldDate});assert.equal(manuel._modal,null);
+ await manuel.action('save-free-meal',{date:oldDate});assert.equal(manuel._modal,null);
+ manuel._modal={type:'day-confirm',date:oldDate};const beforeArchiveDelete=calls.length;await manuel.deleteConfirmed();assert.equal(calls.length,beforeArchiveDelete);await manuel.action('close-modal',{});await tick();
  assert.equal(q(manuel,'#history-'+oldDate.slice(0,7)+'-content').hidden,false);
  await paul.action('view',{view:'settings'});assert.equal(q(paul,'[data-settings="history"]'),null);
- console.log('PASS past calendar entries only in settings, descending collapsible months, preserved actions and permissions');
+ console.log('PASS past calendar entries only in settings, descending collapsible months, read-only entries, preserved links and permissions');
  const RealDate=w.Date;let now=new RealDate('2026-12-31T23:59:59');
  w.Date=class extends RealDate{constructor(...args){super(...(args.length?args:[now.getTime()]));}static now(){return now.getTime();}};
  await manuel.action('view',{view:'week'});
@@ -101,6 +107,7 @@ const tick=()=>new Promise(r=>setImmediate(r));
  now=new RealDate('2027-01-01T00:00:01');w.document.dispatchEvent(new w.Event('visibilitychange'));
  const rolled=[...manuel.shadowRoot.querySelectorAll('[data-ui-calendar-day]')].map(el=>el.dataset.uiCalendarDay);
  assert.equal(rolled[0],'2027-01-01');assert.equal(rolled.at(-1),'2027-01-10');assert.equal(rolled.length,10);
+ const pendingSave=calls.length;manuel._modal={type:'day',date:'2026-12-31',kind:'free'};await manuel.saveDay();assert.equal(calls.length,pendingSave);await manuel.action('close-modal',{});
  assert(!manuel.shadowRoot.textContent.includes('Silvestergericht'));assert(manuel.pastDays().some(day=>day.date==='2026-12-31'));
  now=new RealDate('2027-03-27T12:00:00');manuel.render();const dst=[...manuel.shadowRoot.querySelectorAll('[data-ui-calendar-day]')].map(el=>el.dataset.uiCalendarDay);
  assert.equal(dst.length,10);assert.equal(new Set(dst).size,10);assert.equal(dst.at(-1),'2027-04-05');
