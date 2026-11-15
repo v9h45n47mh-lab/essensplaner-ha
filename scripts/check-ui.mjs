@@ -13,7 +13,7 @@ if(hash(await read(release,'LICENSE'))!==lock.licenseSha256)throw new Error('UI 
 const card=await read(root,'essensplaner-card.js');
 if(!card.includes(`from '${lock.module}'`))throw new Error('Card does not import the pinned module');
 if(card.includes('<svg')||card.includes('icon(name)'))throw new Error('Card has local copies of shared icons');
-for(const helper of ['combobox','dateNavigation','weekCalendar','confirmDialog','downloadJSON','bindGestures']){
+for(const helper of ['combobox','weekCalendar','confirmDialog','downloadJSON','bindGestures']){
  if(!card.includes(helper+'('))throw new Error(`Shared component not adopted: ${helper}`);
 }
 if(card.includes('.calendar-row{')||card.includes('.meal-option{')||card.includes('updateMealOptions()'))throw new Error('Card duplicates shared calendar or selection implementation');

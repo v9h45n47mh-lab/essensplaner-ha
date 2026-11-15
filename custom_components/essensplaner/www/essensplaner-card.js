@@ -1,13 +1,12 @@
-import {UI_CSS, UI_VERSION, navigation, section, row, button, iconButton, toggle, filterButton, field, selectField, dialog, notice, versionInfo, bindUI, escapeHtml, combobox, dateNavigation, weekCalendar, confirmDialog, downloadJSON, bindGestures} from './family-ui/1.2.1/family-ui.js';
+import {UI_CSS, UI_VERSION, navigation, section, row, button, iconButton, toggle, filterButton, field, selectField, dialog, notice, versionInfo, bindUI, escapeHtml, combobox, weekCalendar, confirmDialog, downloadJSON, bindGestures} from './family-ui/1.2.1/family-ui.js';
 
-const ESSENSPLANER_VERSION = '1.4.2';
+const ESSENSPLANER_VERSION = '1.5.0';
 
 class EssensplanerCard extends HTMLElement {
   setConfig(config) {
     this.config = config || {};
     if (!this.shadowRoot) this.attachShadow({ mode: 'open' });
     this._view = 'week';
-    this._weekStart = this._weekStart || this.mondayOf(this.dateKey(new Date()));
     this._modal = null;
     this._notice = '';
     this._noticeError = false;
@@ -20,15 +19,30 @@ class EssensplanerCard extends HTMLElement {
     this.render();
   }
 
-  connectedCallback() { if (this.shadowRoot) { this.ensureUI(); this.bindSwipe(); } }
-  disconnectedCallback() { this._unbindUI?.(); this._unbindUI = null; this._unbindGestures?.(); this._unbindGestures = null; }
+  connectedCallback() {
+    if (this.shadowRoot) { this.ensureUI(); this.render(); }
+    this._onVisibilityChange ||= () => { if (!document.hidden) { this.render(); this.scheduleDayRefresh(); } };
+    document.addEventListener('visibilitychange', this._onVisibilityChange);
+    this.scheduleDayRefresh();
+  }
+  disconnectedCallback() {
+    this._unbindUI?.(); this._unbindUI = null;
+    this._unbindGestures?.(); this._unbindGestures = null;
+    clearTimeout(this._dayTimer);
+    document.removeEventListener('visibilitychange', this._onVisibilityChange);
+  }
+  scheduleDayRefresh() {
+    clearTimeout(this._dayTimer);
+    const now = new Date(), next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    this._dayTimer = setTimeout(() => { if (this.isConnected) { this.render(); this.scheduleDayRefresh(); } }, next - now + 50);
+  }
 
   set hass(hass) {
     this._hass = hass;
     if (!this.isManager() && this._view === 'settings') this._view = 'week';
     if (!this._modal) this.render();
   }
-  getCardSize() { return 6; }
+  getCardSize() { return 10; }
   getState() {
     const states = this._hass?.states || {};
     const valid = (s) => s?.attributes?.week_start && Array.isArray(s.attributes.days) && Array.isArray(s.attributes.meals);
@@ -57,36 +71,59 @@ class EssensplanerCard extends HTMLElement {
     return 'meal-' + Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
   }
   dateKey(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; }
-  mondayOf(dateString) {
-    const date = new Date(`${dateString}T12:00:00`);
-    date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
-    return this.dateKey(date);
-  }
-  shiftWeek(delta) {
-    const date = new Date(`${this._weekStart}T12:00:00`);
-    date.setDate(date.getDate() + delta * 7);
-    const next = this.mondayOf(this.dateKey(date));
-    const attributes = this.getState()?.attributes;
-    if (!attributes?.entries && next !== attributes?.week_start) {
-      this.notify('Bitte nach dem Update Home Assistant neu starten und die App neu laden, damit alle Kalenderwochen verfügbar sind.', true);
-      return;
-    }
-    this._weekStart = next;
-    this.render();
-  }
   entryFor(date) {
     const attributes = this.getState()?.attributes || {};
     return attributes.entries ? attributes.entries[date] || null : (attributes.days || []).find((day) => day.date === date)?.entry || null;
   }
-  weekDays() {
-    const attributes = this.getState()?.attributes;
-    if (!attributes || (!attributes.entries && this._weekStart !== attributes.week_start)) return [];
-    return Array.from({ length: 7 }, (_, offset) => {
-      const day = new Date(`${this._weekStart}T12:00:00`);
+  upcomingDays() {
+    if (!this.getState()) return [];
+    const today = this.dateKey(new Date());
+    return Array.from({ length: 10 }, (_, offset) => {
+      const day = new Date(`${today}T12:00:00`);
       day.setDate(day.getDate() + offset);
       const date = this.dateKey(day);
       return { date, entry: this.entryFor(date) };
     });
+  }
+  pastDays() {
+    const attributes = this.getState()?.attributes || {}, today = this.dateKey(new Date());
+    const entries = attributes.entries || Object.fromEntries((attributes.days || []).map(day => [day.date, day.entry]));
+    return Object.entries(entries).filter(([date, entry]) => date < today && entry?.title)
+      .sort(([a], [b]) => b.localeCompare(a)).map(([date, entry]) => ({date, entry}));
+  }
+  entryActions(day) {
+    return iconButton({icon:'edit',label:'Eintrag bearbeiten',action:'open-day',data:{date:day.date}})
+      + (this.canSaveFreeMeal(day.entry) ? iconButton({icon:'save',label:'Als Gericht speichern',action:'save-free-meal',data:{date:day.date}}) : '')
+      + (this.canDeleteEntry(day.entry) ? iconButton({icon:'trash',label:'Eintrag löschen',action:'confirm-delete-day',data:{date:day.date},danger:true}) : '');
+  }
+  renderCalendar(days, id) {
+    if (!days.length) return '';
+    const entries = days.filter(day => day.entry).map(day => ({date:day.date,title:day.entry.title,
+      description:`Eingetragen von ${day.entry.planned_by}${day.entry.planned_at?' · '+this.time(day.entry.planned_at):''}`,
+      link:day.entry.link,actions:this.entryActions(day)}));
+    // Compose the unchanged UI Kit calendar rows for arbitrary date ranges.
+    const template = document.createElement('template'), rows = new Map();
+    let calendar;
+    for (const day of [...days].sort((a, b) => a.date.localeCompare(b.date))) {
+      if (rows.has(day.date)) continue;
+      template.innerHTML = weekCalendar({id,start:day.date,entries,today:this.dateKey(new Date()),emptyLabel:'Essen einplanen'});
+      calendar ||= template.content.firstElementChild.cloneNode(false);
+      for (const element of template.content.firstElementChild.children) rows.set(element.dataset.uiCalendarDay, element);
+    }
+    calendar.replaceChildren(...days.map(day => rows.get(day.date)));
+    return calendar.outerHTML;
+  }
+  renderHistory(block) {
+    const months = new Map();
+    for (const day of this.pastDays()) {
+      const month = day.date.slice(0, 7);
+      if (!months.has(month)) months.set(month, []);
+      months.get(month).push(day);
+    }
+    const content = [...months].map(([month, days]) => block({id:`history-${month}`,
+      title:new Date(month + '-01T12:00:00').toLocaleDateString('de-DE', {month:'long',year:'numeric'}),
+      expanded:false,content:this.renderCalendar(days, `history-days-${month}`)})).join('');
+    return block({id:'history',title:'Historie',content:content || notice('Noch keine vergangenen Essenseinträge vorhanden.')});
   }
   async call(service, data = {}) {
     const state = this.getState();
@@ -96,7 +133,7 @@ class EssensplanerCard extends HTMLElement {
   }
   esc(value) { return escapeHtml(value); }
   time(value) { return value ? new Date(value).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''; }
-  weekLabel(start, end) {
+  rangeLabel(start, end) {
     return start && end ? `${new Date(start + 'T12:00:00').toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })} – ${new Date(end + 'T12:00:00').toLocaleDateString('de-DE', { day: 'numeric', month: 'short', year: 'numeric' })}` : 'Wird geladen …';
   }
   ensureUI() {
@@ -151,23 +188,15 @@ class EssensplanerCard extends HTMLElement {
     if (!this._modal || !shell.childElementCount) {
       this._folds ||= {};
       for (const fold of shell.querySelectorAll('[data-ui="collapse"]')) this._folds[fold.getAttribute('aria-controls')] = fold.getAttribute('aria-expanded') === 'true';
-      const block = props => section({...props,expanded:this._folds[props.id+'-content'] ?? true});
-      const days = this.weekDays();
-      const calendarEntries = days.filter(day => day.entry).map(day => ({
-        date:day.date,title:day.entry.title,
-        description:`Eingetragen von ${day.entry.planned_by}${day.entry.planned_at?' · '+this.time(day.entry.planned_at):''}`,
-        link:day.entry.link,
-        actions:iconButton({icon:'edit',label:'Eintrag bearbeiten',action:'open-day',data:{date:day.date}})
-          + (this.canSaveFreeMeal(day.entry) ? iconButton({icon:'save',label:'Als Gericht speichern',action:'save-free-meal',data:{date:day.date}}) : '')
-          + (this.canDeleteEntry(day.entry) ? iconButton({icon:'trash',label:'Eintrag löschen',action:'confirm-delete-day',data:{date:day.date},danger:true}) : '')
-      }));
-      const end = new Date(this._weekStart+'T12:00:00'); end.setDate(end.getDate()+6);
-      const week = dateNavigation({label:this.weekLabel(this._weekStart,this.dateKey(end)),previousAction:'previous-week',nextAction:'next-week'})
-        + (days.length ? weekCalendar({id:'meal-week',start:this._weekStart,entries:calendarEntries,today:this.dateKey(new Date()),emptyLabel:'Essen einplanen'})
-          : notice(state?'Für diese Woche sind keine Einträge verfügbar.':'Der Wochenplan-Sensor ist nicht geladen. Bitte Integration und Home-Assistant-Protokoll prüfen.',{error:!state}));
+      const block = props => section({...props,expanded:this._folds[props.id+'-content'] ?? props.expanded ?? true});
+      const days = this.upcomingDays();
+      const week = days.length ? row({title:'Heute und die nächsten 9 Tage',description:this.rangeLabel(days[0].date,days.at(-1).date)})
+        + this.renderCalendar(days, 'meal-days')
+        : notice('Der Wochenplan-Sensor ist nicht geladen. Bitte Integration und Home-Assistant-Protokoll prüfen.',{error:true});
       const mealRows = meals.map(meal => row({title:meal.name,description:`${meal.meat?'Mit Fleisch':'Vegetarisch'} · Isst gern: ${(meal.eaters || []).join(', ') || 'Keine Personen zugeordnet'}`,trailing:iconButton({icon:'edit',label:'Gericht bearbeiten',action:'edit-meal',data:{id:meal.id}})+iconButton({icon:'trash',label:'Gericht löschen',action:'confirm-delete-meal',data:{id:meal.id},danger:true})})).join('');
       const settings = block({id:'meals',title:'Gerichte',trailing:button({label:'Gericht hinzufügen',icon:'add',action:'new-meal',variant:'primary'}),content:mealRows || notice('Noch keine Gerichte gespeichert. Füge ein Gericht hinzu.')})
         + block({id:'export',title:'Sicherung',content:button({label:'Gerichte exportieren',icon:'save',action:'export-meals'})})
+        + (this._view === 'settings' && this.isManager() ? this.renderHistory(block) : '')
         + versionInfo({frontend:ESSENSPLANER_VERSION,backend:a.integration_version,ui:UI_VERSION});
       const randomMeal = this._suggestion?.meal;
       const random = `<div class="grid"><div class="full">${notice('Wähle aus, wer mitisst. Der Vorschlag kommt aus euren gespeicherten Gerichten.')}</div><div class="full">${block({id:'random-people',title:'Wer isst mit?',content:`<div class="toolbar">${['Vera','Manuel','Maximilian','Paul'].map(person => toggle({label:person,action:'random-person',checked:this._randomPeople.includes(person),data:{person}})).join('')}</div>`})}</div><div class="toolbar full">${button({label:this._suggestion?'Gericht vorschlagen':'Zufallsgericht vorschlagen',action:'suggest',variant:'primary'})}${this._suggestion?button({label:'Anderes Gericht',action:'another'}):''}</div>${randomMeal?'<div class="full">'+block({id:'suggestion',title:'Vorschlag',content:row({title:randomMeal.name,description:`${randomMeal.meat?'Mit Fleisch':'Vegetarisch'} · Isst gern: ${(randomMeal.eaters || []).join(', ')}`})+notice(this._suggestion.reason)+button({label:'Im Essensplan einplanen',action:'plan-suggestion',variant:'primary'})})+'</div>':''}</div>`;
@@ -242,7 +271,6 @@ class EssensplanerCard extends HTMLElement {
     this._unbindGestures?.(); this._unbindGestures = null;
     const days = this.shadowRoot?.querySelector('.days');
     if (days) this._unbindGestures = bindGestures(days, {
-      onSwipeLeft:()=>this.shiftWeek(1),onSwipeRight:()=>this.shiftWeek(-1),
       onPullDown:()=>this.action('today',{}),canPull:()=>!this._modal,pullThreshold:70
     });
   }
@@ -267,10 +295,7 @@ class EssensplanerCard extends HTMLElement {
   }
   async action(action, data) {
     if (action === 'view') { if (data.view === 'settings' && !this.isManager()) return; this._view = data.view; this._modal = null; this._notice = ''; this.render(); return; }
-    if (action === 'previous-week' || action === 'next-week') { this.shiftWeek(action === 'next-week' ? 1 : -1); return; }
     if (action === 'today') {
-      const date = this.dateKey(new Date());
-      this._weekStart = this.mondayOf(date);
       this.render();
       return;
     }
@@ -387,6 +412,6 @@ class EssensplanerCard extends HTMLElement {
 if (!customElements.get('essensplaner-card')) customElements.define('essensplaner-card', EssensplanerCard);
 window.customCards = window.customCards || [];
 if (!window.customCards.some((card) => card.type === 'essensplaner-card')) {
-  window.customCards.push({ type: 'essensplaner-card', name: 'Essensplaner', description: 'Wochenplan und Zufallsrezept' });
+  window.customCards.push({ type: 'essensplaner-card', name: 'Essensplaner', description: 'Heute, die nächsten 9 Tage und Zufallsrezept' });
 }
 

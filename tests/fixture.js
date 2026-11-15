@@ -2,14 +2,17 @@ import '../custom_components/essensplaner/www/essensplaner-card.js';
 import {compareKitStyles} from './style-reference.js';
 const people=['Vera','Manuel','Maximilian','Paul'];
 const key=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-const monday=new Date();monday.setHours(12,0,0,0);monday.setDate(monday.getDate()-(monday.getDay()+6)%7);
-const date=n=>{const d=new Date(monday);d.setDate(d.getDate()+n);return key(d)};
+const today=new Date();today.setHours(12,0,0,0);
+const date=n=>{const d=new Date(today);d.setDate(d.getDate()+n);return key(d)};
 let meals=Array.from({length:10},(_,i)=>({id:'rice-'+i,name:['Gemüsereis mit knackigem Gemüse','Reispfanne mit Feta','Curry mit Reis','Reisauflauf mit Tomaten','Gebratener Reis','Reis mit Pilzen','Reissalat mit Kräutern','Bunter Reis mit einem besonders langen Gerichtsnamen für die mobile Darstellung','Reis mit Bohnen','Risotto aus Reis'][i],meat:false,eaters:[...people]}));
 meals.push({id:'meat',name:'Hähnchen mit Kartoffeln',meat:true,eaters:people.filter(p=>p!=='Maximilian')});
 let entries={
- [date(4)]:{title:'Kartoffelauflauf mit Gemüse',planned_by:'Paul',planned_by_user_id:'Paul',planned_at:new Date().toISOString(),link:'https://example.org/auflauf'},
+ [date(-1)]:{title:'Gemüsesuppe von gestern',planned_by:'Vera',planned_by_user_id:'Vera',link:'https://example.org/suppe'},
+ [date(-35)]:{title:'Gericht aus dem Vormonat',planned_by:'Paul',planned_by_user_id:'Paul'},
+ [date(-370)]:{title:'Gericht aus dem Vorjahr',planned_by:'Manuel',planned_by_user_id:'Manuel'},
+ [date(1)]:{title:'Kartoffelauflauf mit Gemüse',planned_by:'Paul',planned_by_user_id:'Paul',planned_at:new Date().toISOString(),link:'https://example.org/auflauf'},
  [date(0)]:{title:'Gemüsereis mit knackigem Gemüse',meal_id:'rice-0',planned_by:'Manuel',planned_by_user_id:'Manuel',planned_at:new Date().toISOString(),link:'https://example.org/rezept'},
- [date(2)]:{title:'Reispfanne mit Feta und einem besonders langen Namen zum Umbruch auf dem Handy',meal_id:'rice-1',planned_by:'Paul',planned_by_user_id:'Paul',planned_at:new Date().toISOString()}
+ [date(9)]:{title:'Reispfanne mit Feta und einem besonders langen Namen zum Umbruch auf dem Handy',meal_id:'rice-1',planned_by:'Paul',planned_by_user_id:'Paul',planned_at:new Date().toISOString()}
 };
 let card, failNext=false,styleObserver,styleFrame;
 function scheduleStyleCheck(){cancelAnimationFrame(styleFrame);styleFrame=requestAnimationFrame(()=>{if(card?.isConnected)document.querySelector('#style-checks').textContent=compareKitStyles(card);});}
@@ -17,7 +20,7 @@ window.addEventListener('resize',scheduleStyleCheck);
 new MutationObserver(scheduleStyleCheck).observe(document.documentElement,{attributes:true});
 function publish(){
  const actor=document.querySelector('#actor').value;
- const state={entity_id:'sensor.essensplaner_wochenplan',attributes:{integration_version:'1.4.2',week_start:date(0),week_end:date(6),days:Array.from({length:7},(_,i)=>({date:date(i),entry:entries[date(i)]||null})),entries:structuredClone(entries),meals:structuredClone(meals)}};
+ const state={entity_id:'sensor.essensplaner_wochenplan',attributes:{integration_version:'1.5.0',week_start:date(0),week_end:date(6),days:Array.from({length:7},(_,i)=>({date:date(i),entry:entries[date(i)]||null})),entries:structuredClone(entries),meals:structuredClone(meals)}};
  card.hass={user:{id:actor,name:actor,is_admin:false},states:{[state.entity_id]:state},callService:async(domain,service,data)=>{
   await new Promise(resolve=>setTimeout(resolve,120));
   if(failNext){failNext=false;throw new Error('Test: Speichern abgelehnt');}

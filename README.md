@@ -1,6 +1,6 @@
 # Essensplaner für Home Assistant
 
-Eine lokale Essensplaner-Integration mit Wochenkalender Montag bis Sonntag, Freitext, gespeicherten Gerichten, Links, Mitesser-Auswahl und Zufallsrezepten.
+Eine lokale Essensplaner-Integration mit einer laufenden Zehntagesansicht ab heute, Freitext, gespeicherten Gerichten, Links, Mitesser-Auswahl und Zufallsrezepten.
 
 ## Installation
 
@@ -17,13 +17,23 @@ In einem normalen Lovelace-Dashboard: **Dashboard bearbeiten → Karte hinzufüg
 type: custom:essensplaner-card
 ```
 
-Wenn Lovelace-Ressourcen in `configuration.yaml` im YAML-Modus verwaltet werden, muss zusätzlich `/essensplaner/essensplaner-card.js?v=1.4.2` als JavaScript-Modul eingetragen werden.
+Wenn Lovelace-Ressourcen in `configuration.yaml` im YAML-Modus verwaltet werden, muss zusätzlich `/essensplaner/essensplaner-card.js?v=1.5.0` als JavaScript-Modul eingetragen werden.
 
 ## Access Control
 
 Den Wochenplan-Sensor (standardmäßig `sensor.essensplaner_wochenplan`) für die Benutzer zum **Lesen und Bedienen** freigeben, direkt oder über sein Label. Seit Version 1.1.1 nennen alle Aktionen der Karte diesen Sensor als Ziel. Eine Freigabe der Service-Domain `essensplaner` ist damit für die Karte nicht erforderlich. Die Integration prüft, dass das Ziel tatsächlich ihr eigener Wochenplan-Sensor ist. Bestehende Einträge und Gerichte dürfen nur die konfigurierten Verwalter oder HA-Administratoren ändern. Eigene Kalendereinträge darf zusätzlich ihr Eintragender löschen.
 
 Nach einem Update Home Assistant neu starten und die App beziehungsweise das Dashboard neu laden. Die automatisch registrierte Karten-Ressource erhält eine neue Versionsadresse.
+
+## Änderungen in 1.5.0
+
+Der Essensplan zeigt immer **heute und die nächsten neun Tage**. Wochenpfeile und Wochen-Wischgesten entfallen. Bei einem Tageswechsel rückt der Zeitraum automatisch weiter; nach Rückkehr zur App wird das Datum ebenfalls geprüft. Freie Eingaben, gespeicherte Gerichte, Links, Zufallsrezepte und Live-Aktualisierungen bleiben erhalten.
+
+Vergangene Kalendereinträge stehen unter **Einstellungen → Historie**, gruppiert nach Monat und Jahr. Die Monate sind einzeln aufklappbar und anfangs geschlossen; die neuesten Monate und Tage stehen oben. Geöffnete Gruppen bleiben bei Aktualisierungen und nach Dialogen geöffnet. Bearbeiten, Löschen und „Als Gericht speichern“ stehen dort wie bisher entsprechend den Berechtigungen zur Verfügung. Daten und Backend-Berechtigungen werden nicht verändert.
+
+Desktop und Mobil sowie helle und dunkle Themes wurden mit Testdaten geprüft. HA UI Kit 1.2.1 bleibt unverändert lokal eingebunden. Details: `docs/TEN_DAY_VIEW.md`.
+
+Nach dem Update Home Assistant neu starten und die App beziehungsweise das Dashboard neu laden.
 
 ## Änderungen in 1.4.2
 
@@ -87,7 +97,7 @@ Die Sensor-Aktualisierung läuft als Home-Assistant-Callback im Event Loop. Ein 
 
 ## Ansicht und Rechte
 
-- Wochenweise Ansicht Montag bis Sonntag mit vor/zurück, Tagesplanung, Link, Bearbeiten/Löschen.
+- Hauptansicht: heute und die nächsten neun Tage mit Tagesplanung, Link, Bearbeiten/Löschen. Vergangene Tage: Einstellungen → Historie mit aufklappbaren Monatsgruppen.
 - Leere Tage können von jedem angemeldeten HA-Konto belegt werden. Bestehende Einträge und der Gerichtskatalog können nur die konfigurierten Verwalter oder HA-Administratoren ändern. Eigene Kalendereinträge kann der Eintragende löschen.
 - Gerichte werden direkt in der App hinzugefügt und bearbeitet. Das Formular zeigt Fleisch/vegetarisch sowie die Personen, die das Gericht gern essen.
 - Wochenplanung, Bearbeiten und Löschen erfolgen in App-Dialogen ohne Browser-Pop-ups. Bei freien Mahlzeiten lassen sich Link und optional der Eintrag im Gerichtskatalog hinterlegen.
