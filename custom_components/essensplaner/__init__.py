@@ -18,6 +18,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
+from .family_access import allows, register
 from .const import DOMAIN, PEOPLE, STORAGE_KEY, STORAGE_VERSION, VERSION
 
 _LOGGER = logging.getLogger(__name__)
@@ -58,6 +59,11 @@ async def async_is_entry_owner(hass: HomeAssistant, item: dict, user_id: str | N
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    def legacy(user):
+        configured={x.strip().casefold() for x in entry.options.get('manager_names','Vera, Manuel').split(',') if x.strip()}
+        admin=user.is_admin or (user.name or '').casefold() in configured
+        return {'view':True,'plan':True,'edit_others':admin,'delete_others':admin,'manage_catalog':admin}
+    await register(hass, DOMAIN, ('view','plan','edit_others','delete_others','manage_catalog'), legacy, entry=entry)
     store = Store(hass, STORAGE_VERSION, f"{STORAGE_KEY}_{entry.entry_id}")
     data = await store.async_load() or {"meals": [], "days": {}, "history": []}
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"store": store, "data": data, "week": date.today()}
@@ -66,10 +72,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async def update():
         await store.async_save(data)
         async_dispatcher_send(hass, f"{DOMAIN}_updated_{entry.entry_id}")
-    async def can_manage(call):
+    async def can_manage(call, permission='manage_catalog'):
+        if not call.context.user_id:return permission in {'view','plan'}
         user = await hass.auth.async_get_user(call.context.user_id) if call.context.user_id else None
         configured = {x.strip().casefold() for x in entry.options.get("manager_names", "Vera, Manuel").split(",") if x.strip()}
-        return bool(user and (user.is_admin or (user.name or "").casefold() in configured))
+        return allows(hass,user,DOMAIN,permission,permission in {"view","plan"} or bool(user and (user.is_admin or (user.name or "").casefold() in configured)),audit=True)
     async def import_catalog(call: ServiceCall):
         await async_validate_target(hass, entry, call)
         payload = call.data["catalog"]
@@ -97,12 +104,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             meat = raw_meat if isinstance(raw_meat, bool) else str(raw_meat).strip().casefold() in ("j", "ja", "yes", "true", "1", "fleisch")
             if meat and "Maximilian" in eaters: raise HomeAssistantError(f"Gericht '{name}' ist als Fleischgericht markiert und Maximilian zugeordnet.")
             meals.append({"id":m.get("id") if isinstance(m.get("id"),str) and m.get("id") else __import__("uuid").uuid4().hex,"name":" ".join(name.split()),"meat":meat,"eaters":[p for p in PEOPLE if p in eaters]})
-        if not await can_manage(call): raise HomeAssistantError("Nur Vera, Manuel oder ein HA-Administrator dürfen Gerichte importieren.")
+        if not await can_manage(call): raise HomeAssistantError("Die Gerichtskatalog-Verwaltung ist für deine Rolle nicht freigegeben.")
         data["meals"]=meals
         await update()
     async def save_meal(call: ServiceCall):
         await async_validate_target(hass, entry, call)
-        if not await can_manage(call): raise HomeAssistantError("Nur Vera, Manuel oder HA-Administratoren dürfen Gerichte verwalten.")
+        if not await can_manage(call): raise HomeAssistantError("Die Gerichtskatalog-Verwaltung ist für deine Rolle nicht freigegeben.")
         item=call.data
         name=" ".join(item["name"].split()); eaters=item["eaters"]
         if not eaters or any(p not in PEOPLE for p in eaters): raise HomeAssistantError("Bitte mindestens eine gültige Person auswählen.")
@@ -115,7 +122,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await update()
     async def delete_meal(call: ServiceCall):
         await async_validate_target(hass, entry, call)
-        if not await can_manage(call): raise HomeAssistantError("Nur Vera, Manuel oder HA-Administratoren dürfen Gerichte löschen.")
+        if not await can_manage(call): raise HomeAssistantError("Die Gerichtskatalog-Verwaltung ist für deine Rolle nicht freigegeben.")
         meal=next((m for m in data["meals"] if m["id"]==call.data["id"]),None)
         if not meal: raise HomeAssistantError("Gericht nicht gefunden.")
         data["meals"]=[m for m in data["meals"] if m["id"]!=meal["id"]]
@@ -124,6 +131,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await update()
     async def show_week(call: ServiceCall):
         await async_validate_target(hass, entry, call)
+        if not await can_manage(call, "view"): raise HomeAssistantError("Der Essensplan ist für deine Rolle nicht freigegeben.")
         hass.data[DOMAIN][entry.entry_id]["week"] = call.data.get("date", date.today())
         await update()
     async def plan_day(call: ServiceCall):
@@ -135,13 +143,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             raise HomeAssistantError("Vergangene Kalendereinträge sind schreibgeschützt.")
         target=call.data["date"].isoformat(); old=data["days"].get(target)
         if call.data.get("clear"):
-            if old and not await can_manage(call) and not await async_is_entry_owner(hass, old, call.context.user_id):
-                raise HomeAssistantError("Du darfst nur eigene Einträge löschen. Andere Einträge dürfen nur Vera, Manuel oder HA-Administratoren löschen.")
+            if not await can_manage(call,'plan') and not await can_manage(call,'delete_others'):raise HomeAssistantError('Einträge löschen ist für deine Rolle nicht freigegeben.')
+            if old and not await can_manage(call,'delete_others') and not await async_is_entry_owner(hass, old, call.context.user_id):
+                raise HomeAssistantError("Du darfst nur eigene Einträge löschen. Zum Löschen fremder Einträge benötigt deine Rolle die Freigabe in Family Access.")
             if old: data["days"].pop(target)
             title=old.get("title","") if old else ""
             action="remove"
         else:
-            if old and not await can_manage(call): raise HomeAssistantError("Bestehende Einträge dürfen nur Vera, Manuel oder HA-Administratoren ändern.")
+            if not old and not await can_manage(call,'plan'):raise HomeAssistantError('Essen eintragen ist für deine Rolle nicht freigegeben.')
+            if old and not await can_manage(call,'edit_others'): raise HomeAssistantError("Zum Ändern bestehender Einträge benötigt deine Rolle die Freigabe in Family Access.")
             meal_id=call.data.get("meal_id"); meal=next((m for m in data["meals"] if m["id"]==meal_id),None) if meal_id else None
             if meal_id and not meal: raise HomeAssistantError("Das gespeicherte Gericht wurde nicht gefunden.")
             title=meal["name"] if meal else " ".join(call.data.get("text","").split())

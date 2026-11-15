@@ -1,3 +1,4 @@
+import importlib.util
 import ast
 import asyncio
 from copy import deepcopy
@@ -29,6 +30,8 @@ async def main():
     ns = {'hass': NS(auth=auth), 'entry': NS(options={}), 'data': data, 'update': update,
           'async_validate_target': validate, 'plan_lock': asyncio.Lock(), 'HomeAssistantError': Rejected,
           'datetime': datetime, 'urlparse': urlparse, 'dt_util': NS(now=lambda: datetime(2026,11,10,0,1))}
+    spec=importlib.util.spec_from_file_location('permission_client',Path(__file__).resolve().parents[1]/'custom_components/essensplaner/family_access.py')
+    client=importlib.util.module_from_spec(spec);spec.loader.exec_module(client);ns['allows']=client.allows;ns['DOMAIN']='essensplaner'
     exec(compile(ast.Module(body=nodes,type_ignores=[]), '<planner handlers>', 'exec'),ns)
     target = '2026-11-10'
     def call(actor, **payload): return NS(context=NS(user_id=actor),data={'date':date.fromisoformat(target),**payload})
@@ -77,6 +80,20 @@ async def main():
     assert data['days'][target]['title']=='Morgen geplant'
     target='2026-11-10'
     print('PASS archive is read-only for owners, managers and administrators; today and future stay writable')
+
+    # Exercise the shipped SDK against a central provider, including a former
+    # name-based manager losing that grant. Native HA admin identity stays false.
+    grants={'paul':{'view':True,'plan':True},'max':{'view':True,'plan':True},'manuel':{'view':True,'plan':True}}
+    ns['hass'].data={'family_access_manager':NS(application_protocol=1,application_permissions=lambda user,app:grants.get(user.id,{}))}
+    seed('max');await denied('paul',clear=True)
+    grants['paul']['delete_others']=True
+    await ns['plan_day'](call('paul',clear=True));assert target not in data['days']
+    assert not users['paul'].is_admin
+    seed('max');grants['paul'].pop('delete_others');await denied('paul',clear=True)
+    seed('paul');await denied('manuel',clear=True)
+    await ns['plan_day'](call('paul',clear=True));assert target not in data['days']
+    ns['hass'].data={}
+    print('PASS central role grants, live revocation, former-manager denial and own deletion')
 
     seed('paul')
     manager_started,release_manager=asyncio.Event(),asyncio.Event()

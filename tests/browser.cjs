@@ -34,7 +34,8 @@ const server=http.createServer((req,res)=>{
   const modal=card.locator('dialog');assert(await modal.isVisible());
   await modal.getByLabel('Name des Gerichts',{exact:true}).fill('Browser-Test <sicher>');
   await modal.getByRole('button',{name:'Speichern',exact:true}).click();await modal.waitFor({state:'detached'});
-  assert((await card.textContent()).includes('Browser-Test <sicher>'));
+  console.log('SAVE DIAGNOSTIC',await card.evaluate(el=>({view:el._view,permissions:el._familyAccess,notice:el._notice,meals:el.getState()?.attributes.meals,call:document.querySelector('#calls').textContent})));
+  await card.getByText('Browser-Test <sicher>',{exact:true}).waitFor();
   const months=card.locator('[data-settings^="history-"]');assert.equal(await months.count(),3);
   const latestMonth=months.first().getByRole('button').first();assert.equal(await latestMonth.getAttribute('aria-expanded'),'false');
   await latestMonth.click();assert.equal(await latestMonth.getAttribute('aria-expanded'),'true');

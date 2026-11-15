@@ -17,7 +17,7 @@ In einem normalen Lovelace-Dashboard: **Dashboard bearbeiten → Karte hinzufüg
 type: custom:essensplaner-card
 ```
 
-Wenn Lovelace-Ressourcen in `configuration.yaml` im YAML-Modus verwaltet werden, muss zusätzlich `/essensplaner/essensplaner-card.js?v=1.5.1` als JavaScript-Modul eingetragen werden.
+Wenn Lovelace-Ressourcen in `configuration.yaml` im YAML-Modus verwaltet werden, muss zusätzlich `/essensplaner/essensplaner-card.js?v=1.6.0` als JavaScript-Modul eingetragen werden.
 
 ## Access Control
 
@@ -25,7 +25,7 @@ Den Wochenplan-Sensor (standardmäßig `sensor.essensplaner_wochenplan`) für di
 
 Nach einem Update Home Assistant neu starten und die App beziehungsweise das Dashboard neu laden. Die automatisch registrierte Karten-Ressource erhält eine neue Versionsadresse.
 
-## Änderungen in 1.5.1
+## Änderungen in 1.6.0
 
 Über dem Essensplan steht nur noch der Datumsbereich. Die zehn Tage ab heute rücken weiterhin automatisch weiter.
 
@@ -108,7 +108,7 @@ Die Sensor-Aktualisierung läuft als Home-Assistant-Callback im Event Loop. Ein 
 ## Ansicht und Rechte
 
 - Hauptansicht: heute und die nächsten neun Tage mit Tagesplanung, Link, Bearbeiten/Löschen. Vergangene Tage: Einstellungen → Historie mit aufklappbaren Monatsgruppen.
-- Leere Tage können von jedem angemeldeten HA-Konto belegt werden. Bestehende Einträge und der Gerichtskatalog können nur die konfigurierten Verwalter oder HA-Administratoren ändern. Eigene heutige und zukünftige Kalendereinträge kann der Eintragende löschen. Vergangene Tage sind schreibgeschützt.
+- Die Rechte für neue und bestehende Einträge sowie den Gerichtskatalog werden getrennt je Rolle in Family Access vergeben. Eigene heutige und zukünftige Kalendereinträge kann der Eintragende löschen. Vergangene Tage sind schreibgeschützt.
 - Gerichte werden direkt in der App hinzugefügt und bearbeitet. Das Formular zeigt Fleisch/vegetarisch sowie die Personen, die das Gericht gern essen.
 - Wochenplanung, Bearbeiten und Löschen erfolgen in App-Dialogen ohne Browser-Pop-ups. Bei freien Mahlzeiten lassen sich Link und optional der Eintrag im Gerichtskatalog hinterlegen.
 
@@ -118,3 +118,14 @@ Die Sensor-Aktualisierung läuft als Home-Assistant-Callback im Event Loop. Ein 
 
 `custom_components/essensplaner` in den gleichnamigen Ordner unter `<HA-Konfiguration>/custom_components/` kopieren und Home Assistant neu starten.
 
+
+
+## Zentrale Rollenrechte
+
+Getrennte Rechte: Essensplan ansehen, Essen eintragen/eigene Einträge löschen, fremde Einträge ändern, fremde Einträge löschen und Gerichtskatalog verwalten. Das Löschen eines Essens eines anderen Benutzers ist ein ausdrücklich zu vergebendes Verwaltungsrecht. Vergangene Einträge bleiben schreibgeschützt. Die lokale Namensliste für Verwalter entfällt.
+
+Berechtigungen werden jetzt in **Family Access → Anwendung → Rolle** verwaltet. Benutzer können mehrere Rollen erhalten; ihre Freigaben ergänzen sich. Vorhandene Anwendungsrechte werden einmalig in Rollen mit dem Zusatz „übernommen“ importiert und den bisherigen Benutzern zugeordnet. Dashboardfreigaben und die Aktivierung der Dashboardnavigation werden dadurch nicht verändert.
+
+Zum Entziehen eines Rechts alle zugewiesenen Rollen einschließlich übernommener Rollen prüfen. Neue Benutzer erhalten nach der Übernahme keine automatischen Anwendungsrechte. Echte HA-Administratoren behalten Vollzugriff zur Wiederherstellung. Geräte-, Eigentümer- und externe Kontoberechtigungen gelten zusätzlich; eine Rolle erzeugt keine HA-Administratorrechte.
+
+**Aktualisierung:** zuerst Family Access Manager 1.1.0 oder neuer, danach die beteiligten Anwendungen aktualisieren und Home Assistant neu starten. Solange Family Access nicht eingerichtet ist, bleibt die bisherige Rechtevergabe erhalten. Ist Family Access eingerichtet, aber nicht verfügbar oder zu alt, werden Anwendungsaktionen für normale Benutzer abgelehnt. Lokale Benutzer-/Personen-, Geräte- und Musikkontozuordnungen bleiben für Identität und Eigentum erhalten; Rechte werden zentral vergeben.
